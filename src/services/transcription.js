@@ -1,8 +1,7 @@
-// Transcription service — turns a video URL into an array of word-level
-// timestamps. The default provider hits our Whisper-backed /api/transcribe
-// endpoint, but the module exposes `transcribe(videoUrl, { provider })` so a
-// different backend (Deepgram, local whisper.cpp, etc.) can be swapped in
-// without any other module knowing.
+// Transcription service — video URL → words[] with timestamps.
+// The default provider hits our Whisper-backed /api/transcribe endpoint.
+// Both onUsage(entry) and signal (AbortController) are propagated so the
+// pipeline can measure cost and let the user cancel a long transcription.
 
 async function extractAudioBlob(videoUrl) {
   const resp = await fetch(videoUrl);
@@ -36,15 +35,23 @@ async function extractAudioBlob(videoUrl) {
   return new Blob(chunks, { type: "audio/webm" });
 }
 
-async function whisperProvider(audioBlob) {
+async function whisperProvider(audioBlob, { signal, onUsage } = {}) {
   const resp = await fetch("/api/transcribe", {
     method: "POST",
     headers: { "Content-Type": audioBlob.type || "audio/webm" },
     body: audioBlob,
+    signal,
   });
   const data = await resp.json();
   if (!resp.ok) {
     throw new Error(data?.error?.message || data?.error || "Falha na transcrição.");
+  }
+  if (data._usage && typeof onUsage === "function") {
+    try {
+      onUsage({ operation: "transcription", ...data._usage });
+    } catch (err) {
+      console.warn("onUsage callback failed:", err);
+    }
   }
   return (data.words || []).map((w) => ({
     word: (w.word || "").trim(),
@@ -53,15 +60,10 @@ async function whisperProvider(audioBlob) {
   }));
 }
 
-/**
- * @param {string} videoUrl - blob: or data: URL of the video
- * @param {object} [opts]
- * @param {(audio:Blob)=>Promise<Array<{word:string,start:number,end:number}>>} [opts.provider]
- * @returns {Promise<Array<{word:string,start:number,end:number}>>}
- */
-export async function transcribe(videoUrl, { provider = whisperProvider } = {}) {
+export async function transcribe(videoUrl, { provider = whisperProvider, signal, onUsage } = {}) {
   const audio = await extractAudioBlob(videoUrl);
-  const words = await provider(audio);
+  if (signal?.aborted) throw new DOMException("Cancelado pelo usuário", "AbortError");
+  const words = await provider(audio, { signal, onUsage });
   if (!words.length) throw new Error("Nenhuma palavra foi reconhecida no áudio.");
   return words;
 }

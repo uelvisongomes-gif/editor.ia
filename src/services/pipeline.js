@@ -1,10 +1,11 @@
 // End-to-end orchestrator: raw video → EDL → timeline segments.
-// Deliberately thin. Each step is a call into a dedicated module so we can
-// swap implementations (a different transcriber, a different LLM, a different
-// scoring rule) without rewriting the orchestrator.
+// Thin on purpose. Each step is its own module so implementations can be
+// swapped without rewriting orchestration.
 //
-// Progress is reported through `onStep(stepId, label)` so the UI can render
-// a progress bar without needing to know pipeline internals.
+// Progress: onStep(stepId, label) drives the UI progress bar.
+// Cancellation: signal is threaded to every network call.
+// Cost: onUsage is called by every module that talks to the model; the
+//       aggregator (usageLog) turns those into a per-project summary.
 
 import { transcribe } from "./transcription.js";
 import { analyzeWaveform } from "./audioAnalysis.js";
@@ -27,6 +28,10 @@ const STEPS = {
   compile: "Compilando linha do tempo...",
 };
 
+const throwIfAborted = (signal) => {
+  if (signal?.aborted) throw new DOMException("Cancelado pelo usuário", "AbortError");
+};
+
 /**
  * @param {object} args
  * @param {string} args.videoUrl
@@ -34,25 +39,30 @@ const STEPS = {
  * @param {string} [args.profileId]
  * @param {(stepId:string, label:string)=>void} [args.onStep]
  * @param {{ words?:Array, waveform?:Array }} [args.reuse]
+ * @param {AbortSignal} [args.signal]
+ * @param {(entry:{operation:string,model?:string,inputTokens?:number|null,outputTokens?:number|null,totalTokens?:number|null,latencyMs?:number,audioDurationSec?:number|null,audioBytes?:number|null})=>void} [args.onUsage]
  */
-export async function runEditingPipeline({ videoUrl, duration, profileId, onStep, reuse = {} }) {
+export async function runEditingPipeline({ videoUrl, duration, profileId, onStep, reuse = {}, signal, onUsage }) {
   const profile = getProfile(profileId);
   const step = (id) => onStep && onStep(id, STEPS[id]);
 
   let words = reuse.words;
   if (!words) {
+    throwIfAborted(signal);
     step("transcribe");
-    words = await transcribe(videoUrl);
+    words = await transcribe(videoUrl, { signal, onUsage });
   }
 
   let waveform = reuse.waveform;
   if (!waveform) {
+    throwIfAborted(signal);
     step("waveform");
     waveform = await analyzeWaveform(videoUrl, duration);
   }
 
+  throwIfAborted(signal);
   step("semantics");
-  const semantic = await analyzeSemantics(words);
+  const semantic = await analyzeSemantics(words, { signal, onUsage });
 
   step("narrative");
   const narrative = buildNarrativeMap(semantic);
@@ -60,15 +70,18 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   step("silences");
   const silences = detectSilences(waveform, words, profile);
 
+  throwIfAborted(signal);
   step("errors");
   let speechErrors = [];
   try {
-    speechErrors = await detectSpeechErrors(words);
+    speechErrors = await detectSpeechErrors(words, { signal, onUsage });
   } catch (err) {
-    // Non-fatal — the pipeline still delivers value without this signal.
+    if (err?.name === "AbortError") throw err;
+    // Non-fatal — pipeline still delivers value without this signal.
     console.warn("Speech error detection failed, continuing:", err);
   }
 
+  throwIfAborted(signal);
   step("edl");
   const edl = buildEDL({ duration, words, semantic, silences, speechErrors, profile });
 

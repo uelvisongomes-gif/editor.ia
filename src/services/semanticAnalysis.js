@@ -84,11 +84,14 @@ Responda APENAS com um JSON válido, sem markdown, no formato exato:
 Sentenças:
 ${sentencesJson}`;
 
-async function analyzeChunk(sentences, topicHint) {
+async function analyzeChunk(sentences, topicHint, { signal, onUsage } = {}) {
   const payload = sentences.map((s) => ({ index: s.index, text: s.text }));
   const raw = await callLLM({
     prompt: PROMPT(JSON.stringify(payload), topicHint),
     maxTokens: 3000,
+    signal,
+    onUsage,
+    operation: "semantic_analysis",
   });
   const parsed = extractJSON(raw);
   if (!parsed || typeof parsed !== "object") {
@@ -111,7 +114,7 @@ async function analyzeChunk(sentences, topicHint) {
  *   offTopicIndexes: number[]
  * }>}
  */
-export async function analyzeSemantics(words) {
+export async function analyzeSemantics(words, { signal, onUsage } = {}) {
   const sentences = preSegmentSentences(words);
   if (!sentences.length) {
     return { topic: "", sentences: [], repeatedGroups: [], offTopicIndexes: [] };
@@ -129,8 +132,9 @@ export async function analyzeSemantics(words) {
   const offTopicIndexes = new Set();
 
   for (let ci = 0; ci < chunks.length; ci++) {
+    if (signal?.aborted) throw new DOMException("Cancelado pelo usuário", "AbortError");
     const chunk = chunks[ci];
-    const result = await analyzeChunk(chunk, topic);
+    const result = await analyzeChunk(chunk, topic, { signal, onUsage });
     if (!topic && result.topic) topic = result.topic;
     for (const s of result.sentences) {
       if (!Number.isFinite(s.index)) continue;

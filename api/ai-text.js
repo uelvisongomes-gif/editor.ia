@@ -1,3 +1,6 @@
+// Chat-completion endpoint. Now passes back the token usage the model
+// reported so the client can log real cost per project.
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -18,6 +21,7 @@ export default async function handler(req, res) {
       return;
     }
 
+    const t0 = Date.now();
     const openaiResp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -33,14 +37,25 @@ export default async function handler(req, res) {
     });
 
     const data = await openaiResp.json();
+    const latencyMs = Date.now() - t0;
 
     if (!openaiResp.ok) {
       res.status(openaiResp.status).json({ error: data.error?.message || "Falha na chamada à IA." });
       return;
     }
 
-    const text = data.choices?.[0]?.message?.content || "";
-    res.status(200).json({ text });
+    // usage is optional in some edge cases; keep the shape stable for the client.
+    const usage = data.usage || {};
+    res.status(200).json({
+      text: data.choices?.[0]?.message?.content || "",
+      usage: {
+        model: data.model || "gpt-4o-mini",
+        inputTokens: usage.prompt_tokens ?? null,
+        outputTokens: usage.completion_tokens ?? null,
+        totalTokens: usage.total_tokens ?? null,
+        latencyMs,
+      },
+    });
   } catch (err) {
     console.error("AI text error:", err);
     res.status(500).json({ error: err.message || "Erro interno ao gerar texto com IA." });

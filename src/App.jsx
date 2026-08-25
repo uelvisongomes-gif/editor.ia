@@ -10,6 +10,10 @@ import {
 import { runEditingPipeline } from "./services/pipeline.js";
 import { EDITING_PROFILES, DEFAULT_PROFILE_ID } from "./services/editingProfiles.js";
 import { EdlReview } from "./components/EdlReview.jsx";
+import { createHistory, pushState, undo as undoHistory, redo as redoHistory, canUndo, canRedo } from "./services/edlHistory.js";
+import { createUsageLog, addUsageEntry, summarizeUsage } from "./services/usageLog.js";
+import { buildProjectSnapshot, saveProject, loadProject, listProjects, deleteProject } from "./services/projectRepository.js";
+import { stampsForProject } from "./services/pipelineVersion.js";
 
 let idCounter = 1;
 const genId = () => "seg-" + idCounter++;
@@ -468,6 +472,21 @@ export default function AiVideoEditor() {
   // Reuses across pipeline runs — skips re-transcribing when only the profile changes.
   const cachedRef = useRef({ videoUrl: null, words: null, waveform: null });
 
+  // --- Phase 2: history, persistence, telemetry ---
+  const [history, setHistory] = useState(() => createHistory([]));
+  const [projectId, setProjectId] = useState(null);
+  const [projectName, setProjectName] = useState("");
+  const [projectCreatedAt, setProjectCreatedAt] = useState(null);
+  const [savedProjects, setSavedProjects] = useState([]);
+  const [saveState, setSaveState] = useState("idle"); // idle | saving | saved | error
+  const [showUsage, setShowUsage] = useState(false);
+  const [usageLog, setUsageLog] = useState(() => createUsageLog());
+  const usageLogRef = useRef(usageLog);
+  usageLogRef.current = usageLog;
+  const abortRef = useRef(null);
+  const autosaveTimerRef = useRef(null);
+  const projectSnapshotRef = useRef({});
+
   const videoRef = useRef(null);
   const timelineRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -532,6 +551,16 @@ export default function AiVideoEditor() {
     setNarrativeTopic("");
     setSmartDone(false);
     setSmartError("");
+    // If the user just re-attached a file with the same name as the loaded
+    // project, keep the project id (they're resuming). Otherwise start fresh.
+    if (!projectSnapshotRef.current?.video || projectSnapshotRef.current.video.fileName !== file.name) {
+      setProjectId(null);
+      setProjectName(file.name);
+      setProjectCreatedAt(null);
+      setUsageLog(createUsageLog());
+      setHistory(createHistory([]));
+      projectSnapshotRef.current = {};
+    }
     cachedRef.current = { videoUrl: null, words: null, waveform: null };
   };
 
@@ -970,12 +999,44 @@ async function callMistakeDetectionAPI(words) {
     }
   };
 
+  // Wraps a segments mutation with a history push and pulls out AI-vs-user
+  // feedback when the caller supplies enough context (e.g. changed segment id).
+  const applySegmentsChange = (updater, meta = {}) => {
+    setSegments((prev) => {
+      const next = updater(prev);
+      // Only record if the caller passed us enough context. Otherwise this
+      // is an internal update (like the initial load) — no history entry.
+      if (meta.label) {
+        let changedSeg = null;
+        let aiDecision = null;
+        if (meta.changedSegmentId) {
+          changedSeg = prev.find((s) => s.id === meta.changedSegmentId);
+          if (changedSeg) aiDecision = changedSeg.action;
+        }
+        setHistory((h) =>
+          pushState(h, next, {
+            ...meta,
+            aiDecision: meta.aiDecision ?? aiDecision,
+            reason: meta.reason ?? changedSeg?.reason,
+            confidence: meta.confidence ?? changedSeg?.confidence,
+            text: meta.text ?? changedSeg?.text,
+          })
+        );
+      }
+      return next;
+    });
+  };
+
   const runIntelligentEdit = async () => {
-    if (!videoUrl || !duration) return;
+    if (!videoUrl || !duration || smartBusy) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
     setSmartBusy(true);
     setSmartError("");
     setSmartDone(false);
     setSmartStep("Iniciando...");
+    // Fresh usage log per run — costs are per pipeline execution.
+    const runLog = createUsageLog();
     try {
       const reuseSameVideo = cachedRef.current.videoUrl === videoUrl;
       const result = await runEditingPipeline({
@@ -983,11 +1044,14 @@ async function callMistakeDetectionAPI(words) {
         duration,
         profileId: intensityId,
         onStep: (_id, label) => setSmartStep(label),
+        signal: controller.signal,
+        onUsage: (entry) => addUsageEntry(runLog, entry),
         reuse: reuseSameVideo
           ? { words: cachedRef.current.words, waveform: cachedRef.current.waveform }
           : {},
       });
       cachedRef.current = { videoUrl, words: result.words, waveform: result.waveform };
+      setUsageLog(runLog);
       // Keep the visual waveform + word timestamps in sync with the manual tools
       // so pause/mistake panels still work after running the smart pipeline.
       setWaveform(result.waveform);
@@ -996,25 +1060,141 @@ async function callMistakeDetectionAPI(words) {
       setEdl(result.edl);
       setNarrativeTopic(result.semantic.topic || "");
       setSegments(result.segments);
+      // Reset history to this new baseline so undo doesn't roll back into
+      // some stale pre-analysis state.
+      setHistory(createHistory(result.segments));
       setSelectedSegId(null);
       setSmartDone(true);
       setSmartStep("Edição inteligente pronta.");
     } catch (err) {
-      console.error(err);
-      setSmartError(err.message || "Falha na edição inteligente.");
+      if (err?.name === "AbortError") {
+        setSmartStep("Análise cancelada.");
+      } else {
+        console.error(err);
+        setSmartError(err.message || "Falha na edição inteligente.");
+      }
     } finally {
       setSmartBusy(false);
+      abortRef.current = null;
     }
+  };
+
+  const cancelIntelligentEdit = () => {
+    if (abortRef.current) abortRef.current.abort();
+  };
+
+  const doUndo = () => {
+    setHistory((h) => {
+      if (!canUndo(h)) return h;
+      const next = undoHistory(h);
+      setSegments(next.present);
+      return next;
+    });
+  };
+  const doRedo = () => {
+    setHistory((h) => {
+      if (!canRedo(h)) return h;
+      const next = redoHistory(h);
+      setSegments(next.present);
+      return next;
+    });
+  };
+
+  // --- Autosave (debounced) ---
+  const scheduleAutosave = useCallback(() => {
+    if (!fileName) return;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    setSaveState((cur) => (cur === "idle" ? "idle" : cur));
+    autosaveTimerRef.current = setTimeout(async () => {
+      setSaveState("saving");
+      try {
+        const originalDur = duration || 0;
+        const editedDur = segments.filter((s) => !s.deleted && s.action !== "review").reduce((a, s) => a + (s.end - s.start), 0);
+        const removedCount = segments.filter((s) => s.deleted && s.action !== "review").length;
+        const reviewCount = segments.filter((s) => s.action === "review").length;
+        const snapshot = buildProjectSnapshot({
+          id: projectId,
+          name: projectName || fileName,
+          createdAt: projectCreatedAt || new Date().toISOString(),
+          video: { fileName, size: rawFile?.size ?? null, durationSec: originalDur },
+          intensityId,
+          transcript,
+          words: wordTimestamps,
+          edl,
+          segments,
+          narrativeTopic,
+          metrics: {
+            durationSec: originalDur,
+            editedSec: editedDur,
+            reductionPct: originalDur > 0 ? Math.round(((originalDur - editedDur) / originalDur) * 100) : 0,
+            removedCount,
+            reviewCount,
+          },
+          feedback: history.feedback,
+          usage: usageLogRef.current,
+          stamps: projectSnapshotRef.current?.stamps || stampsForProject(),
+        });
+        const saved = await saveProject(snapshot);
+        projectSnapshotRef.current = saved;
+        if (!projectId) setProjectId(saved.id);
+        if (!projectCreatedAt) setProjectCreatedAt(saved.createdAt);
+        setSavedProjects(await listProjects());
+        setSaveState("saved");
+      } catch (err) {
+        console.warn("Autosave falhou:", err);
+        setSaveState("error");
+      }
+    }, 800);
+  }, [projectId, projectName, projectCreatedAt, fileName, rawFile, duration, intensityId, transcript, wordTimestamps, edl, segments, narrativeTopic, history.feedback]);
+
+  useEffect(() => {
+    // Anything that affects the saved snapshot triggers a debounced save.
+    if (fileName && (edl.length || segments.length)) scheduleAutosave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segments, edl, narrativeTopic, intensityId]);
+
+  useEffect(() => {
+    // First time — populate the "resume" list.
+    (async () => setSavedProjects(await listProjects()))();
+  }, []);
+
+  // Restores project state (without the video blob, which the user must
+  // re-attach with the same file). Returns true if we found something.
+  const resumeProject = async (id) => {
+    const snap = await loadProject(id);
+    if (!snap) return false;
+    setProjectId(snap.id);
+    setProjectName(snap.name);
+    setProjectCreatedAt(snap.createdAt);
+    setIntensityId(snap.intensityId || DEFAULT_PROFILE_ID);
+    setTranscript(snap.transcript || "");
+    setWordTimestamps(snap.words || []);
+    setEdl(snap.edl || []);
+    setSegments(snap.segments || []);
+    setNarrativeTopic(snap.narrativeTopic || "");
+    setUsageLog(snap.usage || createUsageLog());
+    setHistory(createHistory(snap.segments || []));
+    setSmartDone((snap.edl || []).length > 0);
+    setSmartStep((snap.edl || []).length > 0 ? "Projeto retomado — reanexe o vídeo para reproduzir." : "");
+    projectSnapshotRef.current = snap;
+    return true;
   };
 
   const handleConfirmReview = (segId, shouldRemove) => {
     let touchedEdlId = null;
-    setSegments((segs) =>
-      segs.map((s) => {
-        if (s.id !== segId) return s;
-        touchedEdlId = s.edlId;
-        return { ...s, action: shouldRemove ? "remove" : "keep", deleted: !!shouldRemove };
-      })
+    applySegmentsChange(
+      (segs) =>
+        segs.map((s) => {
+          if (s.id !== segId) return s;
+          touchedEdlId = s.edlId;
+          return { ...s, action: shouldRemove ? "remove" : "keep", deleted: !!shouldRemove };
+        }),
+      {
+        label: shouldRemove ? "confirm_remove" : "confirm_keep",
+        changedSegmentId: segId,
+        aiDecision: "review",
+        userDecision: shouldRemove ? "remove" : "keep",
+      }
     );
     if (touchedEdlId) {
       setEdl((prev) =>
@@ -1028,21 +1208,24 @@ async function callMistakeDetectionAPI(words) {
   };
 
   const handleRestoreSegment = (segId) => {
-    setSegments((segs) =>
-      segs.map((s) => (s.id === segId ? { ...s, deleted: false, action: "keep" } : s))
+    applySegmentsChange(
+      (segs) => segs.map((s) => (s.id === segId ? { ...s, deleted: false, action: "keep" } : s)),
+      { label: "restore", changedSegmentId: segId, userDecision: "keep" }
     );
   };
 
   const handleDeleteSegment = (segId) => {
-    setSegments((segs) =>
-      segs.map((s) => (s.id === segId ? { ...s, deleted: true, action: "remove" } : s))
+    applySegmentsChange(
+      (segs) => segs.map((s) => (s.id === segId ? { ...s, deleted: true, action: "remove" } : s)),
+      { label: "delete", changedSegmentId: segId, userDecision: "remove" }
     );
   };
 
   // Nudge segment boundaries by ±delta seconds. Clamped so a segment can't
-  // invert or spill into a neighbor.
+  // invert or spill into a neighbor. Goes through history — each nudge is
+  // an undoable step.
   const handleNudgeStart = (segId, delta) => {
-    setSegments((segs) => {
+    applySegmentsChange((segs) => {
       const idx = segs.findIndex((s) => s.id === segId);
       if (idx < 0) return segs;
       const seg = segs[idx];
@@ -1052,10 +1235,10 @@ async function callMistakeDetectionAPI(words) {
       const updated = segs.map((s) => (s.id === segId ? { ...s, start: nextStart } : s));
       if (prev && updated[idx - 1].end !== nextStart) updated[idx - 1] = { ...updated[idx - 1], end: nextStart };
       return updated;
-    });
+    }, { label: "nudge_start", changedSegmentId: segId });
   };
   const handleNudgeEnd = (segId, delta) => {
-    setSegments((segs) => {
+    applySegmentsChange((segs) => {
       const idx = segs.findIndex((s) => s.id === segId);
       if (idx < 0) return segs;
       const seg = segs[idx];
@@ -1065,7 +1248,7 @@ async function callMistakeDetectionAPI(words) {
       const updated = segs.map((s) => (s.id === segId ? { ...s, end: nextEnd } : s));
       if (next && updated[idx + 1].start !== nextEnd) updated[idx + 1] = { ...updated[idx + 1], start: nextEnd };
       return updated;
-    });
+    }, { label: "nudge_end", changedSegmentId: segId });
   };
 
   const handlePlayRange = (start, end) => {
@@ -1347,6 +1530,36 @@ async function callMistakeDetectionAPI(words) {
           </div>
         )}
 
+        {!videoUrl && savedProjects.length > 0 && (
+          <Panel title="Projetos salvos">
+            <p style={{ color: "#9A9AA5" }} className="text-xs mb-3">
+              Clique para retomar. Você precisará reanexar o mesmo arquivo de vídeo — só as decisões da IA e ajustes ficam salvos.
+            </p>
+            <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto pr-1">
+              {savedProjects.map((p) => (
+                <div key={p.id} className="flex items-center gap-2">
+                  <button
+                    onClick={() => resumeProject(p.id)}
+                    style={{ background: "#0F0F13", border: "1px solid #1F1F26", color: "#F5F5F7" }}
+                    className="flex-1 text-left px-2.5 py-2 rounded-lg text-xs"
+                  >
+                    <span className="block font-semibold">{p.name || p.id}</span>
+                    <span style={{ color: "#6B6B75" }} className="text-[10px]">Atualizado {new Date(p.updatedAt).toLocaleString("pt-BR")}</span>
+                  </button>
+                  <button
+                    onClick={async () => { await deleteProject(p.id); setSavedProjects(await listProjects()); }}
+                    title="Apagar"
+                    style={{ background: "#1B1B21", color: "#F09595" }}
+                    className="px-2 py-2 rounded-lg text-xs"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </Panel>
+        )}
+
         {videoUrl && (
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
 
@@ -1425,7 +1638,16 @@ async function callMistakeDetectionAPI(words) {
                   </button>
 
                   {smartBusy && (
-                    <p style={{ color: "#9A9AA5" }} className="text-xs mt-2">{smartStep}</p>
+                    <>
+                      <p style={{ color: "#9A9AA5" }} className="text-xs mt-2">{smartStep}</p>
+                      <button
+                        onClick={cancelIntelligentEdit}
+                        style={{ background: "#1B1B21", color: "#F09595", border: "1px solid #5A2323" }}
+                        className="w-full mt-2 py-1.5 rounded-md text-xs font-semibold"
+                      >
+                        Cancelar análise
+                      </button>
+                    </>
                   )}
                   {smartError && <p style={{ color: "#FF8A8A" }} className="text-xs mt-2">{smartError}</p>}
                   {smartDone && !smartBusy && (
@@ -2147,6 +2369,31 @@ async function callMistakeDetectionAPI(words) {
             <div className="md:col-span-3 flex flex-col gap-3">
               {(edl.length > 0 || smartBusy) && (
                 <Panel title="Decisões da IA">
+                  <div className="flex items-center justify-between mb-3 text-[11px]">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={doUndo}
+                        disabled={!canUndo(history)}
+                        title="Desfazer"
+                        style={{ background: "#1B1B21", color: canUndo(history) ? "#C9C9D1" : "#4A4A54" }}
+                        className="px-2 py-1 rounded-md font-semibold flex items-center gap-1"
+                      >
+                        <Undo2 size={12} /> Desfazer
+                      </button>
+                      <button
+                        onClick={doRedo}
+                        disabled={!canRedo(history)}
+                        title="Refazer"
+                        style={{ background: "#1B1B21", color: canRedo(history) ? "#C9C9D1" : "#4A4A54" }}
+                        className="px-2 py-1 rounded-md font-semibold flex items-center gap-1"
+                      >
+                        <RotateCcw size={12} /> Refazer
+                      </button>
+                    </div>
+                    <span style={{ color: saveState === "error" ? "#F09595" : saveState === "saving" ? "#FFB020" : "#5DCAA5" }}>
+                      {saveState === "saving" ? "Salvando..." : saveState === "saved" ? "Salvo" : saveState === "error" ? "Erro ao salvar" : ""}
+                    </span>
+                  </div>
                   {edl.length > 0 && (() => {
                     const originalDur = duration || 0;
                     const editedDur = segments.filter((s) => !s.deleted && s.action !== "review").reduce((a, s) => a + (s.end - s.start), 0);
@@ -2154,6 +2401,9 @@ async function callMistakeDetectionAPI(words) {
                     const pct = originalDur > 0 ? Math.round((removedDur / originalDur) * 100) : 0;
                     const removedCount = segments.filter((s) => s.deleted && s.action !== "review").length;
                     const reviewCount = segments.filter((s) => s.action === "review").length;
+                    const proposed = segments.filter((s) => s.source && s.source !== "keep").length;
+                    const accepted = segments.filter((s) => s.source && s.source !== "keep" && s.deleted).length;
+                    const acceptanceRate = proposed > 0 ? Math.round((accepted / proposed) * 100) : null;
                     return (
                       <div className="grid grid-cols-3 gap-2 mb-3 text-center">
                         <MetricCell label="Original" value={formatTime(originalDur)} />
@@ -2162,9 +2412,47 @@ async function callMistakeDetectionAPI(words) {
                         <MetricCell label="Removido" value={formatTime(removedDur)} />
                         <MetricCell label="Cortes" value={String(removedCount)} />
                         <MetricCell label="A revisar" value={String(reviewCount)} warn={reviewCount > 0} />
+                        {acceptanceRate !== null && (
+                          <MetricCell label="Aceitação" value={`${acceptanceRate}%`} />
+                        )}
                       </div>
                     );
                   })()}
+
+                  {usageLog.entries.length > 0 && (
+                    <div className="mb-3">
+                      <button
+                        onClick={() => setShowUsage((v) => !v)}
+                        style={{ color: "#9A9AA5" }}
+                        className="text-[11px] flex items-center gap-1 hover:underline"
+                      >
+                        {showUsage ? "▾" : "▸"} Consumo de IA (debug)
+                      </button>
+                      {showUsage && (() => {
+                        const s = summarizeUsage(usageLog);
+                        return (
+                          <div style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} className="rounded-lg p-2 mt-1.5 text-[10px]" >
+                            <div className="grid grid-cols-2 gap-1" style={{ color: "#C9C9D1" }}>
+                              <span>Chamadas</span><span className="text-right tabular-nums">{s.calls}</span>
+                              <span>Tokens entrada</span><span className="text-right tabular-nums">{s.inputTokens.toLocaleString("pt-BR")}</span>
+                              <span>Tokens saída</span><span className="text-right tabular-nums">{s.outputTokens.toLocaleString("pt-BR")}</span>
+                              <span>Latência total</span><span className="text-right tabular-nums">{(s.latencyMs / 1000).toFixed(1)}s</span>
+                              <span>Áudio transcrito</span><span className="text-right tabular-nums">{s.audioMinutes.toFixed(1)}min</span>
+                              <span>Custo estimado</span><span className="text-right tabular-nums" style={{ color: "#5DCAA5" }}>{s.estimatedCostUSD > 0 ? `US$ ${s.estimatedCostUSD.toFixed(4)}` : "n/d"}</span>
+                            </div>
+                            <div className="mt-1.5 pt-1.5" style={{ borderTop: "1px solid #1F1F26" }}>
+                              {Object.entries(s.byOperation).map(([op, b]) => (
+                                <div key={op} className="flex justify-between" style={{ color: "#9A9AA5" }}>
+                                  <span>{op}</span>
+                                  <span className="tabular-nums">{b.calls}× · {(b.inputTokens + b.outputTokens).toLocaleString("pt-BR")} tokens</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                   <EdlReview
                     segments={segments}
                     topic={narrativeTopic}

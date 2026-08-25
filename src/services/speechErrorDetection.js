@@ -43,12 +43,19 @@ Transcrição indexada:
 
 /**
  * @param {Array<{word:string,start:number,end:number}>} words
+ * @param {{signal?:AbortSignal, onUsage?:(entry:any)=>void}} [opts]
  * @returns {Promise<Array<{start:number,end:number,confidence:number,reason:string,source:'speechError',text:string,replacementNote?:string}>>}
  */
-export async function detectSpeechErrors(words) {
+export async function detectSpeechErrors(words, { signal, onUsage } = {}) {
   if (!words?.length) return [];
   const indexed = words.map((w, i) => `${i}:${w.word}`).join(" ");
-  const raw = await callLLM({ prompt: PROMPT_TEMPLATE(indexed), maxTokens: 1500 });
+  const raw = await callLLM({
+    prompt: PROMPT_TEMPLATE(indexed),
+    maxTokens: 1500,
+    signal,
+    onUsage,
+    operation: "speech_errors",
+  });
   const parsed = extractJSON(raw);
   if (!Array.isArray(parsed)) return [];
 

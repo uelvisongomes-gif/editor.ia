@@ -1,8 +1,12 @@
-// Thin wrapper around the /api/ai-text endpoint. Kept small on purpose so the
-// serverless endpoint (or the model itself) can be swapped without touching
-// the analysis modules that call it.
+// Thin wrapper around the /api/ai-text endpoint. Kept small on purpose so
+// the serverless endpoint (or the model itself) can be swapped without
+// touching the analysis modules.
+//
+// Every call takes an optional `signal` (AbortController) and an optional
+// `onUsage(entry)` callback. The endpoint returns { text, usage }; we
+// forward usage to the caller so the pipeline can log real cost.
 
-export async function callLLM({ prompt, maxTokens = 2000, signal } = {}) {
+export async function callLLM({ prompt, maxTokens = 2000, signal, onUsage, operation = "llm" } = {}) {
   const resp = await fetch("/api/ai-text", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -13,11 +17,19 @@ export async function callLLM({ prompt, maxTokens = 2000, signal } = {}) {
   if (!resp.ok) {
     throw new Error(data?.error || `LLM request failed (${resp.status})`);
   }
+  if (data.usage && typeof onUsage === "function") {
+    try {
+      onUsage({ operation, ...data.usage });
+    } catch (err) {
+      // Telemetry must never break the pipeline.
+      console.warn("onUsage callback failed:", err);
+    }
+  }
   return data.text || "";
 }
 
-// LLMs happily wrap JSON in ```json fences, add prose, or output smart quotes.
-// This is intentionally forgiving — we'd rather recover than error the pipeline.
+// LLMs happily wrap JSON in ```json fences, add prose, or output smart
+// quotes. Intentionally forgiving — recover instead of erroring the pipeline.
 export function extractJSON(text) {
   if (!text) return null;
   let clean = text.trim();
@@ -29,7 +41,6 @@ export function extractJSON(text) {
   try {
     return JSON.parse(clean);
   } catch (_) {
-    // last-resort: strip trailing commas
     try {
       return JSON.parse(clean.replace(/,\s*([\]}])/g, "$1"));
     } catch (err) {

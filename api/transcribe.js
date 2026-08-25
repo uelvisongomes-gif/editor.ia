@@ -1,3 +1,7 @@
+// Transcription endpoint. Whisper's verbose_json includes duration; we
+// return it separately so the client can bill by minute (Whisper is
+// per-minute-of-audio, not per-token).
+
 export const config = {
   api: {
     bodyParser: false,
@@ -35,6 +39,7 @@ export default async function handler(req, res) {
     form.append("response_format", "verbose_json");
     form.append("timestamp_granularities[]", "word");
 
+    const t0 = Date.now();
     const openaiResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
       headers: {
@@ -44,12 +49,20 @@ export default async function handler(req, res) {
     });
 
     const data = await openaiResp.json();
+    const latencyMs = Date.now() - t0;
 
     if (!openaiResp.ok) {
       res.status(openaiResp.status).json({ error: data.error?.message || "Falha na transcrição." });
       return;
     }
 
+    // Attach billing hints without changing the existing shape the client already reads.
+    data._usage = {
+      model: "whisper-1",
+      audioDurationSec: typeof data.duration === "number" ? data.duration : null,
+      audioBytes: buffer.length,
+      latencyMs,
+    };
     res.status(200).json(data);
   } catch (err) {
     console.error("Transcription error:", err);
