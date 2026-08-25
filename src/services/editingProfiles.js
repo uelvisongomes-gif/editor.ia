@@ -1,13 +1,16 @@
-// Editing intensity profiles. Every threshold that steers a cut lives here —
-// nothing hard-coded downstream. Three confidence bands drive the outcome:
+// Editing intensity profiles. Every threshold that steers a cut lives here.
+// Three confidence bands drive the outcome:
 //
-//   confidence >= executeThreshold  → REMOVE (or TRIM) — the pipeline acts
+//   confidence >= executeThreshold  → REMOVE (or TRIM) — pipeline acts
 //   reviewThreshold ≤ confidence <  → REVIEW — surfaced to the user, not cut
 //   confidence < reviewThreshold    → dropped (segment stays as KEEP)
 //
-// Silence numbers are amplitude/duration thresholds fed to the waveform
-// detector; the semantic flags gate which classes of remove-intents the EDL
-// builder will even consider.
+// Fase 2.1: SEMANTIC cuts (repeated_idea, off_topic, low_value) are held
+// to a SEPARATE, stricter threshold than technical cuts (long_pause,
+// stutter, filler, false_start, abandoned_phrase, self_correction). And
+// every semantic cut has to pass contextGuard on top of the confidence
+// check. The user's mandate: prefer keeping a few unnecessary seconds
+// over an unsafe cut.
 
 export const EDITING_PROFILES = {
   leve: {
@@ -20,7 +23,8 @@ export const EDITING_PROFILES = {
     removeRepeats: false,
     removeOffTopic: false,
     trimLowImportance: false,
-    executeThreshold: 0.85,
+    executeThreshold: 0.85,                // technical cuts
+    executeThresholdSemantic: 0.92,        // semantic cuts (stricter)
     reviewThreshold: 0.65,
     preserveRoles: ["hook", "conclusion", "cta"],
   },
@@ -34,7 +38,8 @@ export const EDITING_PROFILES = {
     removeRepeats: true,
     removeOffTopic: true,
     trimLowImportance: false,
-    executeThreshold: 0.80,
+    executeThreshold: 0.80,                // technical cuts
+    executeThresholdSemantic: 0.88,        // semantic cuts (raised from 0.80)
     reviewThreshold: 0.60,
     preserveRoles: ["hook", "cta"],
   },
@@ -48,7 +53,8 @@ export const EDITING_PROFILES = {
     removeRepeats: true,
     removeOffTopic: true,
     trimLowImportance: true,
-    executeThreshold: 0.72,
+    executeThreshold: 0.72,                // technical cuts
+    executeThresholdSemantic: 0.82,        // semantic cuts (raised from 0.72)
     reviewThreshold: 0.55,
     preserveRoles: ["hook", "cta"],
   },
@@ -59,3 +65,8 @@ export const DEFAULT_PROFILE_ID = "equilibrada";
 export function getProfile(id) {
   return EDITING_PROFILES[id] || EDITING_PROFILES[DEFAULT_PROFILE_ID];
 }
+
+// Which sources are considered "technical" — bypass contextGuard and use
+// the plain executeThreshold. Everything else is treated as semantic and
+// pays the semantic threshold + contextGuard check.
+export const TECHNICAL_SOURCES = new Set(["silence", "speechError"]);

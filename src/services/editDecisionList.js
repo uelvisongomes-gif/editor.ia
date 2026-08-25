@@ -1,3 +1,6 @@
+import { evaluateContext } from "./contextGuard.js";
+import { TECHNICAL_SOURCES } from "./editingProfiles.js";
+
 // The EDL builder is where every analysis signal converges into concrete
 // edit decisions. Downstream code only consumes the EDL, so we're deliberate
 // about *why* each decision was made.
@@ -56,9 +59,13 @@ function mergeOverlapping(candidates) {
   return merged;
 }
 
-function bandForConfidence(confidence, profile) {
+function bandForConfidence(confidence, source, profile) {
   const c = confidence ?? 0.7;
-  if (c >= profile.executeThreshold) return "execute";
+  const isTechnical = TECHNICAL_SOURCES.has(source);
+  const executeAt = isTechnical
+    ? profile.executeThreshold
+    : (profile.executeThresholdSemantic ?? profile.executeThreshold);
+  if (c >= executeAt) return "execute";
   if (c >= profile.reviewThreshold) return "review";
   return "drop";
 }
@@ -123,6 +130,9 @@ export function buildEDL({ duration, words, semantic, silences, speechErrors, pr
           confidence: 0.75,
           text: s.text,
           canOverrideProtection: false,
+          // Guard uses this to test whether the versions are complementary
+          // (widely different lengths) vs truly substitutable.
+          repeatedGroupBestIndex: best,
         });
       }
     }
@@ -188,18 +198,37 @@ export function buildEDL({ duration, words, semantic, silences, speechErrors, pr
   const isInsideProtected = (start, end) =>
     protectedRanges.some(([a, b]) => start >= a - EPSILON && end <= b + EPSILON);
 
-  // 6) Apply protection + confidence bands.
+  // 6) Apply protection + confidence bands + contextGuard for semantic cuts.
+  const semanticSentences = semantic?.sentences || [];
   const decided = [];
   for (const r of intents) {
     const insideProtected = isInsideProtected(r.start, r.end);
     if (insideProtected && !r.canOverrideProtection) continue; // hard block
-    const band = bandForConfidence(r.confidence, profile);
+
+    const band = bandForConfidence(r.confidence, r.source, profile);
     if (band === "drop") continue;
     if (r.end - r.start < MIN_TRIM_DUR) continue;
-    const action = band === "execute"
+
+    let action = band === "execute"
       ? (r.trimOnly ? "trim" : "remove")
       : "review";
-    decided.push({ ...r, action });
+    let contextSafe = true;
+    let contextGuardReason = null;
+
+    // Semantic cuts must pass the context guard. Technical cuts skip it.
+    if (!TECHNICAL_SOURCES.has(r.source)) {
+      const guard = evaluateContext({ candidate: r, sentences: semanticSentences });
+      contextSafe = guard.ok;
+      contextGuardReason = guard.ok ? null : guard.reason;
+      if (!guard.ok) {
+        // Guard fails → the cut is downgraded to review so the user sees
+        // it explicitly. If the fail is "role_protected" or the guard is
+        // still uncertain, we do not silently drop the item.
+        action = "review";
+      }
+    }
+
+    decided.push({ ...r, action, contextSafe, contextGuardReason });
   }
 
   const mergedIntents = mergeOverlapping(decided);
@@ -243,6 +272,8 @@ export function buildEDL({ duration, words, semantic, silences, speechErrors, pr
       narrativeRole: roleAt((r.start + r.end) / 2),
       text: r.text || textInRange(r.start, r.end),
       source: r.source,
+      contextSafe: r.contextSafe !== false, // undefined for technical cuts = safe
+      ...(r.contextGuardReason ? { contextGuardReason: r.contextGuardReason } : {}),
       ...(r.replacementNote ? { replacementNote: r.replacementNote } : {}),
     });
     cursor = r.end;
@@ -347,6 +378,20 @@ export const SAFETY_LABELS = {
   abrupt_close: "Poderia deixar o final abrupto",
   long_removal_streak: "Muitos cortes seguidos",
 };
+
+// Context Guard reasons — mapeadas para explicar por que um corte semântico
+// foi bloqueado ou demovido para review.
+export const CONTEXT_GUARD_LABELS = {
+  next_segment_depends_on_removed_context: "Próxima fala depende deste trecho",
+  next_segment_has_unresolved_reference: "Próxima fala começa com referência (ex: \"isso\", \"então\")",
+  previous_segment_expects_continuation: "Fala anterior fica incompleta sem este trecho",
+  role_protected: "Trecho protegido (hook/CTA)",
+  repetition_versions_look_complementary: "Repetição aparente pode ser complemento, não redundância",
+};
+
+export function labelContextGuard(code) {
+  return CONTEXT_GUARD_LABELS[code] || code;
+}
 
 export function labelReason(code) {
   return REASON_LABELS[code] || code;

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Scissors, Undo2, AlertTriangle, Check, Volume2, Repeat, Ban, Zap, MessageSquare, Sparkles, ChevronDown, ChevronRight, Play, ChevronLeft, ChevronRight as ChevRight, ShieldAlert } from "lucide-react";
-import { labelReason, labelSafety } from "../services/editDecisionList.js";
+import { labelReason, labelSafety, labelContextGuard } from "../services/editDecisionList.js";
 
 function formatTime(s) {
   if (!isFinite(s) || s < 0) s = 0;
@@ -167,6 +167,11 @@ export function EdlReview({
                   {safetyMsg && (
                     <div style={{ color: "#FFB020" }} className="flex items-center gap-1 text-[10px] mt-1">
                       <ShieldAlert size={11} /> {safetyMsg}
+                    </div>
+                  )}
+                  {seg.contextGuardReason && (
+                    <div style={{ color: "#78BAFF" }} className="flex items-center gap-1 text-[10px] mt-1">
+                      <ShieldAlert size={11} /> Context Guard: {labelContextGuard(seg.contextGuardReason)}
                     </div>
                   )}
                   {isExpanded && (

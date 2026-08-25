@@ -368,14 +368,11 @@ function computeCoverDraw(srcW, srcH, dstW, dstH) {
   return { sx, sy, sw, sh };
 }
 
+// Menu enxugado: capacidades técnicas (silence, speechErrors, transitions)
+// vivem DENTRO da Edição Inteligente e não são mais escolhas do usuário.
+// Cor / Volume seguem como ajustes manuais complementares.
 const TOOLS = [
-  { id: "smart", label: "Edição inteligente", icon: Brain, desc: "IA entende a fala e propõe cortes" },
-  { id: "auto", label: "Editar tudo automaticamente", icon: Sparkles, desc: "IA faz tudo de uma vez" },
-  { id: "silence", label: "Cortar pausas longas", icon: Zap, desc: "Detecta e remove silêncios" },
-  { id: "mistakes", label: "Cortar erros de fala", icon: AlertTriangle, desc: "IA detecta gafes e hesitações" },
-  { id: "zoom", label: "Zoom automático", icon: ZoomIn, desc: "Zoom suave a cada corte" },
-  { id: "transitions", label: "Transições entre cortes", icon: SlidersHorizontal, desc: "Fade suave em cada corte" },
-  { id: "captions", label: "Legendas automáticas", icon: MessageSquareText, desc: "Gera legendas com IA" },
+  { id: "smart", label: "Edição inteligente", icon: Brain, desc: "IA edita seu vídeo automaticamente" },
   { id: "color", label: "Correção de cor", icon: Palette, desc: "Brilho, contraste, saturação" },
   { id: "volume", label: "Volume", icon: Volume2, desc: "Ajusta o volume do vídeo" },
 ];
@@ -486,6 +483,14 @@ export default function AiVideoEditor() {
   const abortRef = useRef(null);
   const autosaveTimerRef = useRef(null);
   const projectSnapshotRef = useRef({});
+  // Discreet toast for undo/redo feedback ("Corte desfeito").
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  const showToast = useCallback((message) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast(message);
+    toastTimerRef.current = setTimeout(() => setToast(null), 1800);
+  }, []);
 
   const videoRef = useRef(null);
   const timelineRef = useRef(null);
@@ -1060,6 +1065,11 @@ async function callMistakeDetectionAPI(words) {
       setEdl(result.edl);
       setNarrativeTopic(result.semantic.topic || "");
       setSegments(result.segments);
+      // Transições passam a ser tratamento automático da junção: sempre
+      // que a IA gera cortes, ligamos o fade curto no ponto de cada corte.
+      // Isso torna a junção suave sem exigir escolha do usuário.
+      const hasCuts = result.segments.some((s) => s.deleted);
+      if (hasCuts) setTransitionsEnabled(true);
       // Reset history to this new baseline so undo doesn't roll back into
       // some stale pre-analysis state.
       setHistory(createHistory(result.segments));
@@ -1083,22 +1093,51 @@ async function callMistakeDetectionAPI(words) {
     if (abortRef.current) abortRef.current.abort();
   };
 
-  const doUndo = () => {
+  const doUndo = useCallback(() => {
     setHistory((h) => {
       if (!canUndo(h)) return h;
       const next = undoHistory(h);
       setSegments(next.present);
+      showToast("Alteração desfeita");
       return next;
     });
-  };
-  const doRedo = () => {
+  }, [showToast]);
+  const doRedo = useCallback(() => {
     setHistory((h) => {
       if (!canRedo(h)) return h;
       const next = redoHistory(h);
       setSegments(next.present);
+      showToast("Alteração refeita");
       return next;
     });
-  };
+  }, [showToast]);
+
+  // Global keyboard shortcuts. Respects input/textarea/contentEditable so
+  // native text-editing Ctrl+Z keeps working.
+  useEffect(() => {
+    const isEditableTarget = (el) => {
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+      if (el.isContentEditable) return true;
+      return false;
+    };
+    const onKeyDown = (e) => {
+      const mod = e.ctrlKey || e.metaKey; // Ctrl on Win/Linux, Cmd on macOS
+      if (!mod) return;
+      if (isEditableTarget(e.target)) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        doUndo();
+      } else if ((key === "y") || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        doRedo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [doUndo, doRedo]);
 
   // --- Autosave (debounced) ---
   const scheduleAutosave = useCallback(() => {
@@ -1494,14 +1533,38 @@ async function callMistakeDetectionAPI(words) {
               <p style={{ color: "#9A9AA5" }} className="text-xs">Corte, remova silêncios e gere legendas direto no navegador</p>
             </div>
           </div>
-          <button
-            onClick={toggleExpand}
-            style={{ background: "#131318", border: "1px solid #1F1F26", color: "#C9C9D1" }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
-          >
-            {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-            {expanded ? "Sair da tela cheia" : "Tela cheia"}
-          </button>
+          <div className="flex items-center gap-2">
+            {edl.length > 0 && (
+              <>
+                <button
+                  onClick={doUndo}
+                  disabled={!canUndo(history)}
+                  title="Desfazer (Ctrl+Z)"
+                  style={{ background: "#131318", border: "1px solid #1F1F26", color: canUndo(history) ? "#C9C9D1" : "#4A4A54" }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
+                >
+                  <Undo2 size={13} /> ↶
+                </button>
+                <button
+                  onClick={doRedo}
+                  disabled={!canRedo(history)}
+                  title="Refazer (Ctrl+Y)"
+                  style={{ background: "#131318", border: "1px solid #1F1F26", color: canRedo(history) ? "#C9C9D1" : "#4A4A54" }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
+                >
+                  <RotateCcw size={13} /> ↷
+                </button>
+              </>
+            )}
+            <button
+              onClick={toggleExpand}
+              style={{ background: "#131318", border: "1px solid #1F1F26", color: "#C9C9D1" }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
+            >
+              {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              {expanded ? "Sair da tela cheia" : "Tela cheia"}
+            </button>
+          </div>
         </header>
 
         {!videoUrl && (
@@ -2374,7 +2437,7 @@ async function callMistakeDetectionAPI(words) {
                       <button
                         onClick={doUndo}
                         disabled={!canUndo(history)}
-                        title="Desfazer"
+                        title="Desfazer (Ctrl+Z)"
                         style={{ background: "#1B1B21", color: canUndo(history) ? "#C9C9D1" : "#4A4A54" }}
                         className="px-2 py-1 rounded-md font-semibold flex items-center gap-1"
                       >
@@ -2383,7 +2446,7 @@ async function callMistakeDetectionAPI(words) {
                       <button
                         onClick={doRedo}
                         disabled={!canRedo(history)}
-                        title="Refazer"
+                        title="Refazer (Ctrl+Y)"
                         style={{ background: "#1B1B21", color: canRedo(history) ? "#C9C9D1" : "#4A4A54" }}
                         className="px-2 py-1 rounded-md font-semibold flex items-center gap-1"
                       >
@@ -2509,33 +2572,12 @@ async function callMistakeDetectionAPI(words) {
                 )}
               </Panel>
 
-              <Panel title="Redes de destino">
-                <p style={{ color: "#9A9AA5" }} className="text-xs mb-3">
-                  Marque uma ou mais redes. A primeira marcada define o formato de exportação (proporção do vídeo).
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  {PLATFORMS.map((p) => {
-                    const checked = platformIds.includes(p.id);
-                    return (
-                      <label
-                        key={p.id}
-                        style={{
-                          background: checked ? "#2A1B10" : "#0F0F13",
-                          border: checked ? "1px solid #FF6A2B" : "1px solid #1F1F26",
-                        }}
-                        className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => togglePlatform(p.id)}
-                        />
-                        <span style={{ color: "#F5F5F7" }} className="text-xs flex-1">{p.label}</span>
-                        <span style={{ color: "#6B6B75" }} className="text-[11px]">{p.ratio[0]}:{p.ratio[1]}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+              <Panel title="Destinos">
+                <PlatformChips
+                  platforms={PLATFORMS}
+                  selected={platformIds}
+                  onToggle={togglePlatform}
+                />
               </Panel>
 
               <div style={{ background: "#131318", border: "1px solid #1F1F26" }} className="rounded-xl p-3.5">
@@ -2559,6 +2601,28 @@ async function callMistakeDetectionAPI(words) {
           </div>
         )}
       </div>
+      {toast && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 24,
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#1B1B21",
+            border: "1px solid #2A2A32",
+            color: "#F5F5F7",
+            padding: "8px 14px",
+            borderRadius: 999,
+            fontSize: 12,
+            fontWeight: 600,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            zIndex: 100000,
+            pointerEvents: "none",
+          }}
+        >
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
@@ -2619,6 +2683,74 @@ function StatRow({ label, value }) {
     <div className="flex items-center justify-between py-1.5" style={{ borderBottom: "1px solid #1B1B21" }}>
       <span style={{ color: "#9A9AA5" }} className="text-xs">{label}</span>
       <span className="text-xs font-semibold tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+// Agrupa as plataformas por proporção (9:16 vira uma linha com TikTok/
+// Reels/Shorts, etc). O primeiro marcado ainda define o formato ativo,
+// mesma regra da UI antiga — só a apresentação mudou.
+function PlatformChips({ platforms, selected, onToggle }) {
+  const groups = platforms.reduce((acc, p) => {
+    const key = `${p.ratio[0]}:${p.ratio[1]}`;
+    (acc[key] = acc[key] || []).push(p);
+    return acc;
+  }, {});
+  const orderedKeys = Object.keys(groups).sort((a, b) => {
+    const [aw] = a.split(":").map(Number);
+    const [bw] = b.split(":").map(Number);
+    return aw - bw; // 1:1 primeiro, 9:16, 16:9
+  });
+  const selectedRatios = new Set(
+    platforms.filter((p) => selected.includes(p.id)).map((p) => `${p.ratio[0]}:${p.ratio[1]}`)
+  );
+  const activeRatio = (() => {
+    const first = platforms.find((p) => p.id === selected[0]);
+    return first ? `${first.ratio[0]}:${first.ratio[1]}` : null;
+  })();
+  const hasMultipleRatios = selectedRatios.size > 1;
+  return (
+    <div className="flex flex-col gap-2">
+      {orderedKeys.map((ratio) => (
+        <div key={ratio} className="flex items-center gap-2 flex-wrap">
+          <span
+            title={ratio === activeRatio ? "Formato ativo de exportação" : "Formato disponível"}
+            style={{
+              color: ratio === activeRatio ? "#FF6A2B" : "#6B6B75",
+              background: ratio === activeRatio ? "#2A1B10" : "#0F0F13",
+              border: ratio === activeRatio ? "1px solid #FF6A2B" : "1px solid #1F1F26",
+            }}
+            className="text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded"
+          >
+            {ratio}
+          </span>
+          <div className="flex flex-wrap gap-1">
+            {groups[ratio].map((p) => {
+              const on = selected.includes(p.id);
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => onToggle(p.id)}
+                  title={p.label}
+                  style={{
+                    background: on ? "#FF6A2B" : "#1B1B21",
+                    color: on ? "#1A0A02" : "#C9C9D1",
+                  }}
+                  className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {hasMultipleRatios && (
+        <p style={{ color: "#FFB020" }} className="text-[10px] leading-snug flex items-start gap-1">
+          <AlertTriangle size={11} className="mt-0.5 flex-shrink-0" />
+          Você marcou destinos com proporções diferentes. A exportação vai usar {activeRatio} (a primeira marcada).
+        </p>
+      )}
     </div>
   );
 }
