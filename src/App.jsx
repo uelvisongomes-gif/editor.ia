@@ -459,6 +459,12 @@ export default function AiVideoEditor() {
   const [edl, setEdl] = useState([]);
   const [narrativeTopic, setNarrativeTopic] = useState("");
   const [smartDone, setSmartDone] = useState(false);
+  // Toggles the "watch edited version" mode. When true, the player jumps
+  // through segments with action !== "review" && !deleted, in order.
+  const [previewMode, setPreviewMode] = useState(false);
+  // If not null, playback plays this [start,end] once then pauses (used
+  // by "Reproduzir trecho" in the EDL review panel).
+  const playRangeRef = useRef(null);
   // Reuses across pipeline runs — skips re-transcribing when only the profile changes.
   const cachedRef = useRef({ videoUrl: null, words: null, waveform: null });
 
@@ -612,12 +618,26 @@ export default function AiVideoEditor() {
   const onTimeUpdate = (e) => {
     const t = e.target.currentTime;
     setCurrentTime(t);
-    const activeSegs = segments.filter((s) => !s.deleted).sort((a, b) => a.start - b.start);
+    // "Play a specific range once" — used by EDL review's Play Trecho button.
+    if (playRangeRef.current) {
+      const { end } = playRangeRef.current;
+      if (t >= end - 0.02) {
+        e.target.pause();
+        playRangeRef.current = null;
+        return;
+      }
+    }
     if (zoomEnabled) {
       setZoomScale(computeZoomScale(t, zoomEnabled, zoomIntensity, zoomCues));
     } else if (zoomScale !== 1) {
       setZoomScale(1);
     }
+    // In preview mode we only "see" segments that are actively kept and NOT
+    // pending review — everything else is skipped, giving the user a real
+    // watch of the proposed final cut.
+    const activeSegs = segments
+      .filter((s) => (previewMode ? !s.deleted && s.action !== "review" : !s.deleted))
+      .sort((a, b) => a.start - b.start);
     if (!activeSegs.length) return;
     const curIndex = activeSegs.findIndex((s) => t >= s.start - 0.05 && t < s.end);
     if (curIndex >= 0) {
@@ -627,8 +647,7 @@ export default function AiVideoEditor() {
     } else if (previewOpacity !== 1) {
       setPreviewOpacity(1);
     }
-    const inActive = curIndex >= 0;
-    if (!inActive) {
+    if (curIndex < 0) {
       const next = activeSegs.find((s) => s.start > t - 0.05);
       if (next) {
         e.target.currentTime = next.start;
@@ -1019,6 +1038,45 @@ async function callMistakeDetectionAPI(words) {
       segs.map((s) => (s.id === segId ? { ...s, deleted: true, action: "remove" } : s))
     );
   };
+
+  // Nudge segment boundaries by ±delta seconds. Clamped so a segment can't
+  // invert or spill into a neighbor.
+  const handleNudgeStart = (segId, delta) => {
+    setSegments((segs) => {
+      const idx = segs.findIndex((s) => s.id === segId);
+      if (idx < 0) return segs;
+      const seg = segs[idx];
+      const prev = segs[idx - 1];
+      const minStart = prev ? prev.start + 0.05 : 0;
+      const nextStart = Math.max(minStart, Math.min(seg.end - 0.05, seg.start + delta));
+      const updated = segs.map((s) => (s.id === segId ? { ...s, start: nextStart } : s));
+      if (prev && updated[idx - 1].end !== nextStart) updated[idx - 1] = { ...updated[idx - 1], end: nextStart };
+      return updated;
+    });
+  };
+  const handleNudgeEnd = (segId, delta) => {
+    setSegments((segs) => {
+      const idx = segs.findIndex((s) => s.id === segId);
+      if (idx < 0) return segs;
+      const seg = segs[idx];
+      const next = segs[idx + 1];
+      const maxEnd = next ? next.end - 0.05 : duration;
+      const nextEnd = Math.min(maxEnd, Math.max(seg.start + 0.05, seg.end + delta));
+      const updated = segs.map((s) => (s.id === segId ? { ...s, end: nextEnd } : s));
+      if (next && updated[idx + 1].start !== nextEnd) updated[idx + 1] = { ...updated[idx + 1], start: nextEnd };
+      return updated;
+    });
+  };
+
+  const handlePlayRange = (start, end) => {
+    const v = videoRef.current;
+    if (!v) return;
+    playRangeRef.current = { start, end };
+    v.currentTime = start;
+    v.play().catch(() => {});
+  };
+
+  const togglePreviewMode = () => setPreviewMode((v) => !v);
 
   const runAutoEdit = async () => {
     if (!videoUrl || !duration) return;
@@ -1794,13 +1852,27 @@ async function callMistakeDetectionAPI(words) {
                   </div>
                 )}
                 {!showingEdited && (
-                  <div className="flex items-center gap-3 mt-3">
+                  <div className="flex items-center gap-3 mt-3 flex-wrap">
                     <button onClick={togglePlay} style={{ background: "#FF6A2B", color: "#1A0A02" }} className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0">
                       {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
                     </button>
                     <span style={{ color: "#9A9AA5" }} className="text-xs tabular-nums">
                       {formatTime(currentTime)} / {formatTime(duration)}
                     </span>
+                    {edl.length > 0 && (
+                      <button
+                        onClick={togglePreviewMode}
+                        title="Toca só os trechos que a IA decidiu manter, em sequência"
+                        style={{
+                          background: previewMode ? "#1F3C2A" : "#1B1B21",
+                          color: previewMode ? "#A0E8C0" : "#C9C9D1",
+                          border: previewMode ? "1px solid #2E6845" : "1px solid #26262E",
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold"
+                      >
+                        {previewMode ? "Prévia editada ligada" : "Ver versão editada"}
+                      </button>
+                    )}
                     <span style={{ color: "#5C5C66" }} className="text-xs truncate ml-auto">{fileName}</span>
                     <button onClick={() => fileInputRef.current?.click()} style={{ color: "#9A9AA5" }} className="text-xs flex items-center gap-1 flex-shrink-0">
                       <X size={12} /> Trocar vídeo
@@ -2075,6 +2147,24 @@ async function callMistakeDetectionAPI(words) {
             <div className="md:col-span-3 flex flex-col gap-3">
               {(edl.length > 0 || smartBusy) && (
                 <Panel title="Decisões da IA">
+                  {edl.length > 0 && (() => {
+                    const originalDur = duration || 0;
+                    const editedDur = segments.filter((s) => !s.deleted && s.action !== "review").reduce((a, s) => a + (s.end - s.start), 0);
+                    const removedDur = Math.max(0, originalDur - editedDur);
+                    const pct = originalDur > 0 ? Math.round((removedDur / originalDur) * 100) : 0;
+                    const removedCount = segments.filter((s) => s.deleted && s.action !== "review").length;
+                    const reviewCount = segments.filter((s) => s.action === "review").length;
+                    return (
+                      <div className="grid grid-cols-3 gap-2 mb-3 text-center">
+                        <MetricCell label="Original" value={formatTime(originalDur)} />
+                        <MetricCell label="Editado" value={formatTime(editedDur)} accent />
+                        <MetricCell label="Redução" value={`-${pct}%`} accent />
+                        <MetricCell label="Removido" value={formatTime(removedDur)} />
+                        <MetricCell label="Cortes" value={String(removedCount)} />
+                        <MetricCell label="A revisar" value={String(reviewCount)} warn={reviewCount > 0} />
+                      </div>
+                    );
+                  })()}
                   <EdlReview
                     segments={segments}
                     topic={narrativeTopic}
@@ -2082,6 +2172,9 @@ async function callMistakeDetectionAPI(words) {
                     onDelete={handleDeleteSegment}
                     onSeek={handleSeek}
                     onConfirmReview={handleConfirmReview}
+                    onNudgeStart={handleNudgeStart}
+                    onNudgeEnd={handleNudgeEnd}
+                    onPlayRange={handlePlayRange}
                   />
                 </Panel>
               )}
@@ -2238,6 +2331,16 @@ function StatRow({ label, value }) {
     <div className="flex items-center justify-between py-1.5" style={{ borderBottom: "1px solid #1B1B21" }}>
       <span style={{ color: "#9A9AA5" }} className="text-xs">{label}</span>
       <span className="text-xs font-semibold tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function MetricCell({ label, value, accent = false, warn = false }) {
+  const color = warn ? "#FFB020" : accent ? "#5DCAA5" : "#F5F5F7";
+  return (
+    <div style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} className="rounded-lg py-2 px-1.5">
+      <p style={{ color: "#6B6B75" }} className="text-[9px] font-bold uppercase tracking-wide">{label}</p>
+      <p style={{ color }} className="text-sm font-bold tabular-nums leading-tight">{value}</p>
     </div>
   );
 }

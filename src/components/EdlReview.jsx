@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
-import { Scissors, Undo2, AlertTriangle, Check, Volume2, Repeat, Ban, Zap, MessageSquare, Sparkles, ChevronDown, ChevronRight } from "lucide-react";
-import { labelReason } from "../services/editDecisionList.js";
+import { Scissors, Undo2, AlertTriangle, Check, Volume2, Repeat, Ban, Zap, MessageSquare, Sparkles, ChevronDown, ChevronRight, Play, ChevronLeft, ChevronRight as ChevRight, ShieldAlert } from "lucide-react";
+import { labelReason, labelSafety } from "../services/editDecisionList.js";
 
 function formatTime(s) {
   if (!isFinite(s) || s < 0) s = 0;
@@ -15,6 +15,7 @@ const REASON_ICON = {
   stutter: Repeat,
   false_start: Zap,
   abandoned_phrase: Zap,
+  self_correction: Zap,
   repeated_idea: Repeat,
   off_topic: Ban,
   low_value: AlertTriangle,
@@ -39,8 +40,20 @@ const FILTERS = [
   { id: "keep", label: "Mantidos" },
 ];
 
-export function EdlReview({ segments, topic, onRestore, onDelete, onSeek, onConfirmReview }) {
-  const [filter, setFilter] = useState("remove");
+const NUDGE_STEP = 0.2; // seconds each border nudge shifts the cut boundary.
+
+export function EdlReview({
+  segments,
+  topic,
+  onRestore,
+  onDelete,
+  onSeek,
+  onConfirmReview,
+  onNudgeStart,
+  onNudgeEnd,
+  onPlayRange,
+}) {
+  const [filter, setFilter] = useState("review");
   const [expandedIds, setExpandedIds] = useState(() => new Set());
 
   const items = useMemo(() => {
@@ -73,7 +86,7 @@ export function EdlReview({ segments, topic, onRestore, onDelete, onSeek, onConf
   if (!segments || !segments.length) {
     return (
       <div style={{ color: "#9A9AA5" }} className="text-xs">
-        Nenhuma decisão de edição ainda. Rode a edição inteligente para gerar a EDL.
+        Nenhuma decisão ainda. Rode a edição inteligente.
       </div>
     );
   }
@@ -87,7 +100,7 @@ export function EdlReview({ segments, topic, onRestore, onDelete, onSeek, onConf
         </div>
       )}
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
         {FILTERS.map((f) => {
           const active = filter === f.id;
           const count = f.id === "all" ? segments.length : counts[f.id];
@@ -95,18 +108,12 @@ export function EdlReview({ segments, topic, onRestore, onDelete, onSeek, onConf
             <button
               key={f.id}
               onClick={() => setFilter(f.id)}
-              style={{
-                background: active ? "#FF6A2B" : "#1B1B21",
-                color: active ? "#1A0A02" : "#C9C9D1",
-              }}
+              style={{ background: active ? "#FF6A2B" : "#1B1B21", color: active ? "#1A0A02" : "#C9C9D1" }}
               className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold"
             >
               {f.label}
               <span
-                style={{
-                  background: active ? "#1A0A02" : "#0A0A0D",
-                  color: active ? "#FF6A2B" : "#9A9AA5",
-                }}
+                style={{ background: active ? "#1A0A02" : "#0A0A0D", color: active ? "#FF6A2B" : "#9A9AA5" }}
                 className="px-1.5 rounded text-[10px] tabular-nums"
               >
                 {count}
@@ -116,7 +123,7 @@ export function EdlReview({ segments, topic, onRestore, onDelete, onSeek, onConf
         })}
       </div>
 
-      <div className="flex flex-col gap-1.5 max-h-[420px] overflow-y-auto pr-1">
+      <div className="flex flex-col gap-1.5 max-h-[520px] overflow-y-auto pr-1">
         {items.length === 0 && (
           <p style={{ color: "#6B6B75" }} className="text-xs py-2 text-center">Nenhum item nesse filtro.</p>
         )}
@@ -125,51 +132,29 @@ export function EdlReview({ segments, topic, onRestore, onDelete, onSeek, onConf
           const isReview = seg.action === "review";
           const isRemoved = seg.deleted;
           const isExpanded = expandedIds.has(seg.id);
-          const borderColor = isReview ? "#FFB020" : isRemoved ? "#5A2A1E" : "#1F3C2A";
+          const border = isReview ? "#FFB020" : isRemoved ? "#5A2A1E" : "#1F3C2A";
+          const safetyMsg = seg.safety ? labelSafety(seg.safety) : null;
           return (
-            <div
-              key={seg.id}
-              style={{
-                background: "#0F0F13",
-                border: `1px solid ${borderColor}`,
-              }}
-              className="rounded-lg p-2"
-            >
+            <div key={seg.id} style={{ background: "#0F0F13", border: `1px solid ${border}` }} className="rounded-lg p-2">
               <div className="flex items-start gap-2">
-                <button
-                  onClick={() => toggleExpanded(seg.id)}
-                  style={{ color: "#6B6B75" }}
-                  className="mt-0.5"
-                >
+                <button onClick={() => toggleExpanded(seg.id)} style={{ color: "#6B6B75" }} className="mt-0.5">
                   {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </button>
                 <span
-                  style={{
-                    background: isReview ? "#FFB020" : isRemoved ? "#FF6A2B" : "#1D9E75",
-                    color: "#1A0A02",
-                  }}
+                  style={{ background: isReview ? "#FFB020" : isRemoved ? "#FF6A2B" : "#1D9E75", color: "#1A0A02" }}
                   className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
                 >
                   <Icon size={12} />
                 </span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span style={{ color: "#F5F5F7" }} className="text-xs font-semibold">
-                      {labelReason(seg.reason)}
-                    </span>
+                    <span style={{ color: "#F5F5F7" }} className="text-xs font-semibold">{labelReason(seg.reason)}</span>
                     {seg.narrativeRole && ROLE_LABELS[seg.narrativeRole] && (
-                      <span
-                        style={{ background: "#1B1B21", color: "#9A9AA5" }}
-                        className="text-[10px] px-1.5 py-0.5 rounded"
-                      >
+                      <span style={{ background: "#1B1B21", color: "#9A9AA5" }} className="text-[10px] px-1.5 py-0.5 rounded">
                         {ROLE_LABELS[seg.narrativeRole]}
                       </span>
                     )}
-                    {isReview && (
-                      <span style={{ color: "#FFB020" }} className="text-[10px] font-bold uppercase">
-                        A revisar
-                      </span>
-                    )}
+                    {isReview && <span style={{ color: "#FFB020" }} className="text-[10px] font-bold uppercase">A revisar</span>}
                   </div>
                   <button
                     onClick={() => onSeek?.(seg.start)}
@@ -177,20 +162,46 @@ export function EdlReview({ segments, topic, onRestore, onDelete, onSeek, onConf
                     className="text-[11px] tabular-nums mt-0.5 hover:underline"
                   >
                     {formatTime(seg.start)} → {formatTime(seg.end)}
-                    <span style={{ color: "#6B6B75" }}> · {Math.round((seg.end - seg.start) * 10) / 10}s</span>
-                    <span style={{ color: "#6B6B75" }}> · confiança {Math.round((seg.confidence || 0) * 100)}%</span>
+                    <span style={{ color: "#6B6B75" }}> · {Math.round((seg.end - seg.start) * 10) / 10}s · confiança {Math.round((seg.confidence || 0) * 100)}%</span>
                   </button>
-                  {isExpanded && seg.text && (
-                    <p
-                      style={{ color: "#C9C9D1", background: "#1B1B21", borderLeft: "2px solid #FF6A2B" }}
-                      className="text-[11px] mt-2 p-2 rounded italic leading-snug"
-                    >
-                      "{seg.text}"
-                    </p>
+                  {safetyMsg && (
+                    <div style={{ color: "#FFB020" }} className="flex items-center gap-1 text-[10px] mt-1">
+                      <ShieldAlert size={11} /> {safetyMsg}
+                    </div>
+                  )}
+                  {isExpanded && (
+                    <>
+                      {seg.text && (
+                        <p style={{ color: "#C9C9D1", background: "#1B1B21", borderLeft: "2px solid #FF6A2B" }} className="text-[11px] mt-2 p-2 rounded italic leading-snug">
+                          "{seg.text}"
+                        </p>
+                      )}
+                      {seg.replacementNote && (
+                        <p style={{ color: "#5DCAA5" }} className="text-[10px] mt-1">Versão preservada: {seg.replacementNote}</p>
+                      )}
+                      {(onNudgeStart || onNudgeEnd) && (
+                        <div className="flex items-center gap-1 mt-2">
+                          <span style={{ color: "#6B6B75" }} className="text-[10px]">Ajustar bordas:</span>
+                          <button onClick={() => onNudgeStart?.(seg.id, -NUDGE_STEP)} title="Início −0,2s" style={{ background: "#1B1B21", color: "#C9C9D1" }} className="px-1.5 py-0.5 rounded text-[10px] flex items-center"><ChevronLeft size={10} />ini</button>
+                          <button onClick={() => onNudgeStart?.(seg.id, +NUDGE_STEP)} title="Início +0,2s" style={{ background: "#1B1B21", color: "#C9C9D1" }} className="px-1.5 py-0.5 rounded text-[10px] flex items-center">ini<ChevRight size={10} /></button>
+                          <button onClick={() => onNudgeEnd?.(seg.id, -NUDGE_STEP)} title="Fim −0,2s" style={{ background: "#1B1B21", color: "#C9C9D1" }} className="px-1.5 py-0.5 rounded text-[10px] flex items-center"><ChevronLeft size={10} />fim</button>
+                          <button onClick={() => onNudgeEnd?.(seg.id, +NUDGE_STEP)} title="Fim +0,2s" style={{ background: "#1B1B21", color: "#C9C9D1" }} className="px-1.5 py-0.5 rounded text-[10px] flex items-center">fim<ChevRight size={10} /></button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 mt-2 justify-end">
+              <div className="flex items-center gap-1.5 mt-2 justify-end flex-wrap">
+                {onPlayRange && (
+                  <button
+                    onClick={() => onPlayRange(seg.start, seg.end)}
+                    style={{ background: "#1B1B21", color: "#C9C9D1" }}
+                    className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold"
+                  >
+                    <Play size={11} /> Reproduzir
+                  </button>
+                )}
                 {isReview && (
                   <>
                     <button

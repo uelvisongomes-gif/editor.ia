@@ -1,15 +1,13 @@
-// Editing intensity profiles. Same shape for all three so the pipeline just
-// switches on `profile.id`. `equilibrada` is the default per spec.
+// Editing intensity profiles. Every threshold that steers a cut lives here —
+// nothing hard-coded downstream. Three confidence bands drive the outcome:
 //
-// Fields:
-//   silenceThreshold   — amplitude below which a bucket counts as silent
-//   minSilenceDur      — pauses shorter than this stay in
-//   removeSpeechErrors — cut stutters/false starts/filler chains
-//   removeRepeats      — remove worse takes when the LLM groups repeated ideas
-//   removeOffTopic     — cut sentences classified as off_topic
-//   trimLowImportance  — mark low-importance development sentences as "trim"
-//   reviewThreshold    — confidence below this becomes action=review (asks user)
-//   preserveRoles      — never auto-remove sentences with these narrative roles
+//   confidence >= executeThreshold  → REMOVE (or TRIM) — the pipeline acts
+//   reviewThreshold ≤ confidence <  → REVIEW — surfaced to the user, not cut
+//   confidence < reviewThreshold    → dropped (segment stays as KEEP)
+//
+// Silence numbers are amplitude/duration thresholds fed to the waveform
+// detector; the semantic flags gate which classes of remove-intents the EDL
+// builder will even consider.
 
 export const EDITING_PROFILES = {
   leve: {
@@ -22,6 +20,7 @@ export const EDITING_PROFILES = {
     removeRepeats: false,
     removeOffTopic: false,
     trimLowImportance: false,
+    executeThreshold: 0.85,
     reviewThreshold: 0.65,
     preserveRoles: ["hook", "conclusion", "cta"],
   },
@@ -35,7 +34,8 @@ export const EDITING_PROFILES = {
     removeRepeats: true,
     removeOffTopic: true,
     trimLowImportance: false,
-    reviewThreshold: 0.6,
+    executeThreshold: 0.80,
+    reviewThreshold: 0.60,
     preserveRoles: ["hook", "cta"],
   },
   agressiva: {
@@ -48,7 +48,8 @@ export const EDITING_PROFILES = {
     removeRepeats: true,
     removeOffTopic: true,
     trimLowImportance: true,
-    reviewThreshold: 0.5,
+    executeThreshold: 0.72,
+    reviewThreshold: 0.55,
     preserveRoles: ["hook", "cta"],
   },
 };
