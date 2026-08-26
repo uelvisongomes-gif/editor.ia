@@ -22,9 +22,20 @@ const RESTART_MARKERS = [
   ["não", "peraí"],
   ["pera", "aí"],
   ["peraí"],
-  ["não", "é"],       // "não é isso, é aquilo"
+  ["não", "é"],           // "não é isso, é aquilo"
   ["deixa", "eu", "ver"],
   ["deixa", "eu", "pensar"],
+  ["deixa", "eu", "refazer"],
+  ["esquece", "isso"],
+  ["esquece", "o", "que"],
+  ["vou", "refazer"],
+  ["vamos", "de", "novo"],
+  ["vou", "começar", "de", "novo"],
+  ["vou", "recomeçar"],
+  ["recomeça"],
+  ["ai", "meu", "deus"],  // frequentemente sinal de trava/erro
+  ["puta", "que", "pariu"],
+  ["caraca"],
 ];
 
 function normalize(w) {
@@ -139,6 +150,53 @@ export function detectSpeechErrorsHeuristic(words) {
         });
       }
       break; // não checa outros marcadores na mesma posição
+    }
+  }
+
+  // 4) Reinício de frase sem marcador: duas sentenças consecutivas que
+  //    começam com as mesmas 2-3 palavras (ex: "Hoje eu vou mostrar. Hoje
+  //    eu vou ensinar."). Marca a primeira como abandoned_phrase.
+  {
+    // Split em "sentenças" grosseiras por ponto final, ? ou !.
+    const sentences = [];
+    let cur = [];
+    let curStart = 0;
+    for (let i = 0; i < words.length; i++) {
+      if (cur.length === 0) curStart = i;
+      cur.push(i);
+      const raw = words[i].word || "";
+      if (/[.!?]$/.test(raw) || i === words.length - 1) {
+        sentences.push({ startIdx: curStart, endIdx: i });
+        cur = [];
+      }
+    }
+    for (let s = 0; s < sentences.length - 1; s++) {
+      const a = sentences[s];
+      const b = sentences[s + 1];
+      const aLen = a.endIdx - a.startIdx + 1;
+      const bLen = b.endIdx - b.startIdx + 1;
+      // Só considera se ambas curtas (<=15 palavras) e o gap entre elas < 2s.
+      if (aLen > 15 || bLen > 15) continue;
+      const gap = words[b.startIdx].start - words[a.endIdx].end;
+      if (gap > 2.0) continue;
+      // Compara as N primeiras palavras (N = min(3, aLen, bLen)).
+      const n = Math.min(3, aLen, bLen);
+      if (n < 2) continue;
+      let same = true;
+      for (let k = 0; k < n; k++) {
+        if (norm[a.startIdx + k] !== norm[b.startIdx + k]) { same = false; break; }
+      }
+      if (!same) continue;
+      // Marca a primeira sentença inteira como reinício.
+      results.push({
+        start: words[a.startIdx].start,
+        end: words[a.endIdx].end,
+        confidence: 0.85,
+        reason: "false_start",
+        source: "speechError",
+        text: words.slice(a.startIdx, a.endIdx + 1).map((w) => w.word).join(" "),
+      });
+      s += 1; // pula a segunda pra não re-analisar
     }
   }
 
