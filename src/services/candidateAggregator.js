@@ -244,7 +244,32 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
     }
   }
 
-  return dedupCandidates(candidates);
+  // Enumeração retórica é INTOCÁVEL: cortes que atravessam suas bordas
+  // são truncados. Sem isso, gap-silence/pausa "entre itens" acabam
+  // apagando itens da lista.
+  const clamped = [];
+  for (const c of candidates) {
+    let s = c.start, e = c.end;
+    let killed = false;
+    for (const sp of enumerationSpans) {
+      const startInside = s > sp.start + 0.05 && s < sp.end - 0.05;
+      const endInside   = e > sp.start + 0.05 && e < sp.end - 0.05;
+      // Candidato que atravessa borda de enumeração: encolhe pra fora.
+      if (!startInside && endInside && s < sp.start) {
+        e = sp.start;
+      } else if (startInside && !endInside && e > sp.end) {
+        s = sp.end;
+      } else if (startInside && endInside) {
+        // Corte inteiramente dentro de enumeração — só sobrevive se for
+        // surgical (bigram stutter / hesitação real dentro de um item)
+        if (!SURGICAL_TYPES.has(c.primaryType)) killed = true;
+      }
+    }
+    if (killed) continue;
+    if (e - s < 0.1) continue;
+    clamped.push({ ...c, start: s, end: e });
+  }
+  return dedupCandidates(clamped);
 }
 
 /**
