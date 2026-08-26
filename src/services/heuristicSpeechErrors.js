@@ -168,6 +168,10 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
   // 1) Repetição imediata de PALAVRA idêntica ("eu eu", "vou vou", "e e").
   //    Aceita repetições exatas — vale a partir de 2 iguais em sequência.
   {
+    const CONNECTOR_BEFORE_STUTTER = new Set([
+      "porque", "quando", "como", "para", "pra", "que", "se",
+      "e", "ou", "mas", "pois",
+    ]);
     let i = 0;
     while (i < words.length - 1) {
       let j = i + 1;
@@ -176,8 +180,15 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
       // Só marca a partir da segunda ocorrência quando é uma palavra
       // curta (< 6 chars) e curta em duração (< 0.6s cada).
       if (repeats >= 2 && norm[i].length > 0 && norm[i].length <= 6) {
-        // Removemos as REPETIÇÕES, deixando a última.
-        const start = words[i].start;
+        // Se a palavra IMEDIATAMENTE anterior é um conector aberto
+        // ("porque falta, falta, falta"), inclui ela no cut — o conector
+        // sozinho fica sem sentido depois do corte.
+        let startIdx = i;
+        if (i > 0 && CONNECTOR_BEFORE_STUTTER.has(norm[i - 1])) {
+          const gapBefore = words[i].start - words[i - 1].end;
+          if (gapBefore <= 0.5) startIdx = i - 1;
+        }
+        const start = words[startIdx].start;
         const end = words[j - 2].end; // até a penúltima; a última fica.
         if (end > start + 0.02) {
           results.push({
@@ -186,7 +197,7 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
             reason: "stutter",
             source: "speechError",
       detectedBy: "heuristic",
-            text: words.slice(i, j - 1).map((w) => w.word).join(" "),
+            text: words.slice(startIdx, j - 1).map((w) => w.word).join(" "),
           });
         }
         i = j - 1;
@@ -214,7 +225,18 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
         const gap = words[i + ngram].start - words[i + ngram - 1].end;
         if (gap <= 0.5) {
           const start = words[i].start;
-          const end = words[i + ngram - 1].end;
+          let end = words[i + ngram - 1].end;
+          // Se a palavra logo APÓS o segundo bigram for esticada (Whisper
+          // escondeu continuação da 1a tentativa dentro dela), estende o
+          // cut para dentro dela até 1s. Ex.: "na maioria" duplicado com
+          // "das" seguinte de 1.74s = mata a 1a tentativa completa.
+          const nextAfterBoth = words[i + ngram * 2];
+          if (nextAfterBoth) {
+            const nextDur = nextAfterBoth.end - nextAfterBoth.start;
+            if (nextDur > 0.8) {
+              end = nextAfterBoth.start + Math.min(1.0, nextDur * 0.6);
+            }
+          }
           if (end > start + 0.05) {
             results.push({
               start, end,
