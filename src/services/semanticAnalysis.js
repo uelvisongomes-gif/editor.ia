@@ -12,28 +12,40 @@ import { callLLM, extractJSON } from "./llmClient.js";
 
 const CHUNK_SENTENCES = 90;
 
-// Rough sentence pre-segmentation from word timestamps: split on end-of-sentence
-// punctuation OR on a long silent gap. We ship these to the LLM as the base
-// units so it can classify each without also having to invent boundaries.
+// Rough sentence pre-segmentation from word timestamps.
+// Fase 2.3: quebras mais agressivas — em teste real o Whisper devolve
+// pouca pontuação em vídeos curtos e falas emendadas, gerando "sentenças"
+// de 10-15 segundos que impedem o LLM de identificar micro-erros. Agora
+// quebramos em:
+//   - pontuação forte (.!?…)
+//   - gap silencioso >= 0.5s (era 0.9s)
+//   - vírgula OU "e" isolado quando o cur já tem >= 8 palavras
+//   - hard limit de 15 palavras (era 40)
 function preSegmentSentences(words) {
   const sentences = [];
   let cur = [];
   let start = null;
+  const push = (endWord) => {
+    sentences.push({
+      index: sentences.length,
+      start,
+      end: endWord.end,
+      text: cur.map((c) => c.word).join(" ").trim(),
+    });
+    cur = [];
+  };
   for (let i = 0; i < words.length; i++) {
     const w = words[i];
     if (cur.length === 0) start = w.start;
     cur.push(w);
     const next = words[i + 1];
     const gap = next ? next.start - w.end : Infinity;
-    const endsSentence = /[.!?…]$/.test(w.word);
-    if (endsSentence || gap >= 0.9 || !next || cur.length >= 40) {
-      sentences.push({
-        index: sentences.length,
-        start,
-        end: w.end,
-        text: cur.map((c) => c.word).join(" ").trim(),
-      });
-      cur = [];
+    const raw = (w.word || "").trim();
+    const endsSentence = /[.!?…]$/.test(raw);
+    const softBreak = /,$/.test(raw) && cur.length >= 8;
+    const hardLimit = cur.length >= 15;
+    if (endsSentence || gap >= 0.5 || softBreak || hardLimit || !next) {
+      push(w);
     }
   }
   return sentences;
@@ -121,6 +133,8 @@ async function analyzeChunk(sentences, topicHint, { signal, onUsage } = {}) {
  */
 export async function analyzeSemantics(words, { signal, onUsage } = {}) {
   const sentences = preSegmentSentences(words);
+  console.log("[semanticAnalysis] pre-segmented into", sentences.length, "sentences:");
+  sentences.forEach((s) => console.log(`  #${s.index} [${s.start.toFixed(2)}→${s.end.toFixed(2)}] "${s.text}"`));
   if (!sentences.length) {
     return { topic: "", sentences: [], repeatedGroups: [], offTopicIndexes: [] };
   }
