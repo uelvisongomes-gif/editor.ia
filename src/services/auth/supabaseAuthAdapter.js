@@ -106,3 +106,7 @@ export const supabaseAuthAdapter = {
 // Exposto pra o server-side adapter poder pegar o mesmo cliente
 // (raw supabase para queries diretas de usage/quota).
 export const supabaseRawClient = supabase;
+
+// True quando as env vars do Supabase existem — a UI pode esconder
+// o botão de login se isso for false (modo "sem auth").
+export const supabaseConfigured = !!supabase;

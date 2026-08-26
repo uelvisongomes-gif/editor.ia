@@ -8,8 +8,12 @@ import {
   onAuthChange, signInWithEmail, signUpWithEmail, signInWithMagicLink,
   signOut, getCurrentUser,
 } from "../services/auth/authProvider.js";
+import { supabaseConfigured } from "../services/auth/supabaseAuthAdapter.js";
 
 export function AuthGate({ onUserChange }) {
+  // Sem Supabase configurado o app roda em modo aberto — nada de UI de auth.
+  if (!supabaseConfigured) return null;
+
   const [user, setUser] = useState(() => getCurrentUser());
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("signIn"); // signIn | signUp | magic

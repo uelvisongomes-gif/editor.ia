@@ -47,6 +47,18 @@ function extractBearer(req) {
  *   await guard.tick({ llmCalls: 1 });
  */
 export async function authGuard(req, res, { require } = {}) {
+  // Modo aberto — se Supabase não está configurado no servidor, o auth
+  // fica desligado (útil pra deploy sem quota, dev local, etc). Quando
+  // as env vars aparecerem, o guard passa a exigir Bearer automaticamente.
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE) {
+    return {
+      user: { userId: "anonymous", email: null, plan: "unlimited" },
+      plan: "unlimited",
+      quota: { usage: { transcriptionMinutes: 0, llmCalls: 0, exports: 0 }, limits: PLAN_LIMITS.unlimited },
+      async tick() { /* no-op sem backend de quota */ },
+    };
+  }
+
   const token = extractBearer(req);
   if (!token) {
     res.status(401).json({ error: "Auth necessária. Envie header Authorization: Bearer <jwt>." });
