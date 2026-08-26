@@ -8,6 +8,7 @@ export { buildEDL, labelReason, labelSafety, labelContextGuard, REASON_LABELS, S
 export { evaluateContext } from "./contextGuard.js";
 export { collectCandidates, dedupCandidates } from "./candidateAggregator.js";
 export { decideAll, labelBlocked, BLOCKED_LABELS } from "./decisionEngine.js";
+export { computeZoomEvents, scaleAt } from "./smartZoom.js";
 export { compileTimeline } from "./timelineCompilation.js";
 export { EDITING_PROFILES, DEFAULT_PROFILE_ID, getProfile } from "./editingProfiles.js";
 export { runEditingPipeline, PIPELINE_STEPS } from "./pipeline.js";

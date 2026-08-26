@@ -15,6 +15,7 @@ import { createHistory, pushState, undo as undoHistory, redo as redoHistory, can
 import { createUsageLog, addUsageEntry, summarizeUsage } from "./services/usageLog.js";
 import { buildProjectSnapshot, saveProject, loadProject, listProjects, deleteProject } from "./services/projectRepository.js";
 import { stampsForProject } from "./services/pipelineVersion.js";
+import { scaleAt as computeSmartZoomScale } from "./services/smartZoom.js";
 
 let idCounter = 1;
 const genId = () => "seg-" + idCounter++;
@@ -459,6 +460,11 @@ export default function AiVideoEditor() {
   const [edl, setEdl] = useState([]);
   const [problemCandidates, setProblemCandidates] = useState([]);
   const [narrativeTopic, setNarrativeTopic] = useState("");
+  const [zoomEvents, setZoomEvents] = useState([]);
+  // Toggle "Zoom automático" na Edição Inteligente. Padrão ON.
+  const [smartZoomEnabled, setSmartZoomEnabled] = useState(true);
+  // Debug panel só aparece com ?debug=1 na URL.
+  const debugMode = typeof window !== "undefined" && window.location.search.includes("debug=1");
   // --- Diagnóstico forense ---
   // Cada entrada captura o que o pipeline "viu" numa janela específica que o
   // usuário marcou manualmente como erro NÃO detectado.
@@ -559,6 +565,7 @@ export default function AiVideoEditor() {
     setActiveTool("smart");
     setEdl([]);
     setProblemCandidates([]);
+    setZoomEvents([]);
     setNarrativeTopic("");
     setSmartDone(false);
     setSmartError("");
@@ -667,7 +674,11 @@ export default function AiVideoEditor() {
         return;
       }
     }
-    if (zoomEnabled) {
+    // Prioridade 1: smartZoom (novo, do pipeline). Fallback: zoom legado.
+    if (smartZoomEnabled && zoomEvents.length) {
+      const s = computeSmartZoomScale(zoomEvents, t);
+      if (s !== zoomScale) setZoomScale(s);
+    } else if (zoomEnabled) {
       setZoomScale(computeZoomScale(t, zoomEnabled, zoomIntensity, zoomCues));
     } else if (zoomScale !== 1) {
       setZoomScale(1);
@@ -1070,6 +1081,7 @@ async function callMistakeDetectionAPI(words) {
       setTranscript(result.words.map((w) => w.word).join(" "));
       setEdl(result.edl);
       setProblemCandidates(result.problemCandidates || []);
+      setZoomEvents(result.zoomEvents || []);
       setNarrativeTopic(result.semantic.topic || "");
       setSegments(result.segments);
       // Transições passam a ser tratamento automático da junção: sempre
@@ -1168,6 +1180,7 @@ async function callMistakeDetectionAPI(words) {
           words: wordTimestamps,
           edl,
           segments,
+          zoomEvents,
           narrativeTopic,
           metrics: {
             durationSec: originalDur,
@@ -1217,6 +1230,7 @@ async function callMistakeDetectionAPI(words) {
     setWordTimestamps(snap.words || []);
     setEdl(snap.edl || []);
     setSegments(snap.segments || []);
+    setZoomEvents(snap.zoomEvents || []);
     setNarrativeTopic(snap.narrativeTopic || "");
     setUsageLog(snap.usage || createUsageLog());
     setHistory(createHistory(snap.segments || []));
@@ -1793,9 +1807,7 @@ async function callMistakeDetectionAPI(words) {
               {activeTool === "smart" && (
                 <Panel title="Edição inteligente">
                   <p style={{ color: "#9A9AA5" }} className="text-xs mb-3">
-                    A IA transcreve a fala, entende o assunto, identifica pausas mortas, erros, ideias repetidas
-                    e trechos fora do tema — e propõe uma primeira versão editada. Nenhum corte é aplicado no
-                    arquivo original: você pode restaurar qualquer trecho.
+                    IA encontra erros e edita seu vídeo.
                   </p>
 
                   <p style={{ color: "#6B6B75" }} className="text-[10px] font-bold uppercase tracking-wide mb-1.5">
@@ -1826,6 +1838,17 @@ async function callMistakeDetectionAPI(words) {
                       );
                     })}
                   </div>
+
+                  <label className="flex items-center justify-between mb-3 cursor-pointer" style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} onClick={(e) => e.stopPropagation()}>
+                    <span className="text-[11px] px-2 py-1.5" style={{ color: "#C9C9D1" }}>Zoom automático</span>
+                    <span className="pr-2">
+                      <input
+                        type="checkbox"
+                        checked={smartZoomEnabled}
+                        onChange={(e) => setSmartZoomEnabled(e.target.checked)}
+                      />
+                    </span>
+                  </label>
 
                   <button
                     onClick={runIntelligentEdit}
@@ -2485,11 +2508,31 @@ async function callMistakeDetectionAPI(words) {
 
                     {/* Effects (zoom cues) */}
                     <div className="absolute left-0 right-0" style={{ top: 138, height: 18 }}>
-                      <TrackLabel text="Efeitos" />
+                      <TrackLabel text="Zoom" />
                       <div className="absolute inset-0" style={{ paddingLeft: 46 }}>
                         <div className="relative w-full h-full">
-                          {zoomEnabled && zoomCues && zoomCues.map((t, i) => (
-                            <div key={i} title="Zoom automático" style={{
+                          {smartZoomEnabled && zoomEvents.map((ev) => (
+                            <div
+                              key={ev.id}
+                              title={`Zoom In · ${ev.reason} · ${ev.start.toFixed(1)}-${ev.end.toFixed(1)}s · "${ev.text?.slice(0, 60) || ""}"`}
+                              onClick={(e) => { e.stopPropagation(); handlePlayRange(ev.start - 0.3, ev.end + 0.3); }}
+                              style={{
+                                position: "absolute",
+                                left: `${(ev.start / duration) * 100}%`,
+                                width: `${Math.max(0.5, ((ev.end - ev.start) / duration) * 100)}%`,
+                                top: 2, bottom: 2,
+                                background: "linear-gradient(90deg,#5DCAA5,#3E9B7A)",
+                                borderRadius: 3,
+                                cursor: "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                              }}
+                            >
+                              <ZoomIn size={9} color="#0A140D" />
+                            </div>
+                          ))}
+                          {/* legado */}
+                          {!smartZoomEnabled && zoomEnabled && zoomCues && zoomCues.map((t, i) => (
+                            <div key={i} title="Zoom (legado)" style={{
                               position: "absolute", left: `${(t / duration) * 100}%`, top: 0,
                               transform: "translateX(-50%)",
                               width: 16, height: 16, borderRadius: "50%",
@@ -2585,7 +2628,7 @@ async function callMistakeDetectionAPI(words) {
             </div>
 
             <div className="md:col-span-3 flex flex-col gap-3">
-              {(edl.length > 0 || smartBusy) && (
+              {debugMode && (edl.length > 0 || smartBusy) && (
                 <Panel title="Diagnóstico do pipeline">
                   <p style={{ color: "#9A9AA5" }} className="text-[11px] mb-2 leading-snug">
                     Rebobina o vídeo até o início do erro, clique <strong>Marcar início</strong>,

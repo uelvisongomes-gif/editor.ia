@@ -17,6 +17,7 @@ import { buildNarrativeMap } from "./narrativeAnalysis.js";
 import { buildEDL } from "./editDecisionList.js";
 import { compileTimeline } from "./timelineCompilation.js";
 import { getProfile } from "./editingProfiles.js";
+import { computeZoomEvents } from "./smartZoom.js";
 
 const STEPS = {
   transcribe: "Transcrevendo o áudio...",
@@ -110,7 +111,11 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   step("compile");
   const segments = compileTimeline(edl);
 
-  return { words, waveform, semantic, narrative, edl, segments, profile, problemCandidates };
+  // SmartZoom — derivado da análise já feita. Sem chamada LLM extra.
+  const zoomEvents = computeZoomEvents({ semantic, segments, profile });
+  console.log("[pipeline] zoomEvents:", zoomEvents.length, zoomEvents);
+
+  return { words, waveform, semantic, narrative, edl, segments, profile, problemCandidates, zoomEvents };
 }
 
 export { STEPS as PIPELINE_STEPS };

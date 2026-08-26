@@ -33,6 +33,12 @@ export const EDITING_PROFILES = {
     maxTechnicalCutDur: 4.0,
     maxSemanticCutDur: 6.0,
     preserveRoles: ["hook", "conclusion", "cta"],
+    // SmartZoom — quantos eventos, gap mínimo e escala. Leve = poucos zooms.
+    zoomMaxEvents: 3,
+    zoomMinGapSec: 12,
+    zoomScale: 1.05,
+    zoomHoldSec: 1.6,
+    zoomFadeSec: 0.35,
   },
   equilibrada: {
     id: "equilibrada",
@@ -51,6 +57,11 @@ export const EDITING_PROFILES = {
     maxTechnicalCutDur: 5.0,
     maxSemanticCutDur: 8.0,
     preserveRoles: ["hook", "cta"],
+    zoomMaxEvents: 6,
+    zoomMinGapSec: 8,
+    zoomScale: 1.07,
+    zoomHoldSec: 1.8,
+    zoomFadeSec: 0.35,
   },
   agressiva: {
     id: "agressiva",
@@ -69,6 +80,11 @@ export const EDITING_PROFILES = {
     maxTechnicalCutDur: 8.0,
     maxSemanticCutDur: 12.0,
     preserveRoles: ["hook", "cta"],
+    zoomMaxEvents: 10,
+    zoomMinGapSec: 5,
+    zoomScale: 1.09,
+    zoomHoldSec: 1.7,
+    zoomFadeSec: 0.30,
   },
 };
 
