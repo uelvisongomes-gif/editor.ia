@@ -85,63 +85,92 @@ function computeZoomScale(t, zoomEnabled, zoomIntensity, zoomCues = null) {
 }
 
 const CAPTION_STYLES = [
-  // ====== Estilos premium (top de linha) ======
   {
-    id: "tiktok", label: "TikTok Bold",
-    textColor: "#FFFFFF", strokeColor: "#000000", strokeWidth: 10,
-    bg: null, position: "middle-bottom", uppercase: true, weight: 900,
-    sizeScale: 1.05, fontFamily: "'Inter', 'Arial Black', sans-serif",
-    shadow: { color: "rgba(0,0,0,0.6)", blur: 8, offsetY: 4 },
+    id: "classico", label: "01. Clássico",
+    textColor: "#FFFFFF", weight: 700, sizeScale: 0.95,
+    bg: "rgba(0,0,0,0.88)", position: "middle-bottom", pillRadius: 8,
+    fontFamily: "'Inter', sans-serif",
   },
   {
-    id: "mrbeast", label: "MrBeast Gold",
-    textColor: "#FFD400", strokeColor: "#000000", strokeWidth: 14,
-    bg: null, position: "middle-bottom", uppercase: true, weight: 900,
-    sizeScale: 1.15, fontFamily: "'Impact', 'Arial Black', sans-serif",
-    shadow: { color: "rgba(0,0,0,0.8)", blur: 12, offsetY: 6 },
+    id: "elegante", label: "02. Elegante",
+    textColor: "#FFFFFF", accentColor: "#D4AF37", accentTarget: "last",
+    weight: 500, sizeScale: 1.0, italic: true,
+    bg: null, position: "middle-bottom",
+    fontFamily: "'Georgia', serif",
+    shadow: { color: "rgba(0,0,0,0.7)", blur: 8, offsetY: 3 },
   },
   {
-    id: "neon", label: "Neon Cyber",
-    textColor: "#00FFF0", strokeColor: "#000000", strokeWidth: 8,
-    bg: null, position: "middle-bottom", uppercase: true, weight: 900,
-    sizeScale: 1.05, fontFamily: "'Inter', 'Arial Black', sans-serif",
-    shadow: { color: "#00FFF0", blur: 24, offsetY: 0 },
+    id: "minimalista", label: "03. Minimalista",
+    textColor: "#FFFFFF", weight: 600, sizeScale: 0.92,
+    bg: null, position: "middle-bottom",
+    fontFamily: "'Inter', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.85)", blur: 6, offsetY: 3 },
   },
   {
-    id: "karaoke", label: "Karaokê (palavra por palavra)",
-    textColor: "#FFFFFF", highlightColor: "#FFEB3B", strokeColor: "#000000",
-    strokeWidth: 9, bg: null, position: "middle-bottom", uppercase: true,
-    weight: 900, sizeScale: 1.05, fontFamily: "'Inter', 'Arial Black', sans-serif",
-    shadow: { color: "rgba(0,0,0,0.7)", blur: 8, offsetY: 4 },
-    perWord: true,
+    id: "moderno", label: "04. Moderno",
+    textColor: "#FFFFFF", accentBg: "#8B5CF6", accentTextColor: "#FFFFFF",
+    accentTarget: "last", weight: 700, sizeScale: 1.0,
+    bg: null, position: "middle-bottom",
+    fontFamily: "'Inter', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.55)", blur: 5, offsetY: 2 },
   },
   {
-    id: "cinema", label: "Cinema",
-    textColor: "#FFFFFF", strokeColor: null, strokeWidth: 0,
-    bg: null, position: "bottom", uppercase: false, weight: 600,
-    sizeScale: 0.95, fontFamily: "'Georgia', serif",
-    shadow: { color: "rgba(0,0,0,0.9)", blur: 6, offsetY: 3 },
+    id: "bold", label: "05. Bold",
+    textColor: "#FFFFFF", accentColor: "#FFD400", accentTarget: "last",
+    weight: 900, sizeScale: 1.2, uppercase: true, bg: null,
+    position: "middle-bottom",
+    fontFamily: "'Inter', 'Arial Black', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.6)", blur: 6, offsetY: 3 },
   },
   {
-    id: "reels", label: "Reels Pill",
-    textColor: "#FFFFFF", strokeColor: null, strokeWidth: 0,
-    bg: "rgba(0,0,0,0.85)", position: "middle-bottom", uppercase: false,
-    weight: 700, sizeScale: 1.05, fontFamily: "'Inter', sans-serif",
-    pillRadius: 999,
+    id: "destaque", label: "06. Destaque",
+    textColor: "#1A1A1A", bg: "#FFD400", position: "middle-bottom",
+    weight: 800, sizeScale: 1.0, pillRadius: 4,
+    fontFamily: "'Inter', sans-serif",
   },
   {
-    id: "pop", label: "Pop Pink",
-    textColor: "#FF3EA5", strokeColor: "#FFFFFF", strokeWidth: 9,
-    bg: null, position: "middle-bottom", uppercase: true, weight: 900,
-    sizeScale: 1.05, fontFamily: "'Inter', 'Arial Black', sans-serif",
-    shadow: { color: "rgba(0,0,0,0.55)", blur: 10, offsetY: 4 },
+    id: "cinema", label: "07. Cinema",
+    textColor: "#FFFFFF", weight: 500, sizeScale: 0.95, uppercase: true,
+    bg: null, position: "middle-bottom",
+    fontFamily: "'Inter', sans-serif",
+    letterSpacing: 0.18,
+    shadow: { color: "rgba(0,0,0,0.75)", blur: 6, offsetY: 3 },
   },
-  // ====== Estilos básicos (mantidos por compatibilidade) ======
-  { id: "classic", label: "Clássico", textColor: "#ffffff", strokeColor: null, strokeWidth: 0, bg: "rgba(0,0,0,0.65)", position: "bottom", uppercase: false, weight: 700, sizeScale: 1 },
-  { id: "impact", label: "Destaque", textColor: "#ffffff", strokeColor: "#000000", strokeWidth: 8, bg: null, position: "middle-bottom", uppercase: true, weight: 900, sizeScale: 1.3 },
-  { id: "yellow", label: "Amarelo impacto", textColor: "#FFD400", strokeColor: "#000000", strokeWidth: 8, bg: null, position: "bottom", uppercase: true, weight: 900, sizeScale: 1.2 },
-  { id: "minimal", label: "Minimalista", textColor: "#ffffff", strokeColor: null, strokeWidth: 0, bg: null, position: "bottom", uppercase: false, weight: 500, sizeScale: 0.85 },
-  { id: "brand", label: "Caixa laranja", textColor: "#1A0A02", strokeColor: null, strokeWidth: 0, bg: "#FF6A2B", position: "bottom", uppercase: false, weight: 700, sizeScale: 1 },
+  {
+    id: "caixa", label: "08. Caixa",
+    textColor: "#FFFFFF", weight: 600, sizeScale: 1.0,
+    bg: "rgba(0,0,0,0.55)", borderColor: "#FFFFFF", borderWidth: 2,
+    position: "middle-bottom", pillRadius: 4,
+    fontFamily: "'Inter', sans-serif",
+  },
+  {
+    id: "social", label: "09. Social Media",
+    textColor: "#1A1A1A", accentColor: "#FF3EA5", accentTarget: "last",
+    weight: 700, sizeScale: 1.0, bg: "#FFFFFF",
+    position: "middle-bottom", pillRadius: 999,
+    fontFamily: "'Inter', sans-serif",
+  },
+  {
+    id: "dynamic", label: "10. Dynamic",
+    textColor: "#FFFFFF", accentColor: "#00E5FF", accentTarget: "last",
+    weight: 900, sizeScale: 1.15, uppercase: true, italic: true,
+    bg: null, position: "middle-bottom",
+    fontFamily: "'Inter', 'Arial Black', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.7)", blur: 6, offsetY: 3 },
+  },
+  {
+    id: "clean", label: "11. Clean",
+    textColor: "#1A1A1A", weight: 600, sizeScale: 0.95,
+    bg: "#FFFFFF", position: "middle-bottom", pillRadius: 12,
+    fontFamily: "'Inter', sans-serif",
+  },
+  {
+    id: "gradient", label: "12. Gradient",
+    textColor: "#FFFFFF", weight: 700, sizeScale: 1.0,
+    bgGradient: { from: "#FF6B9D", to: "#8B5CF6" },
+    position: "middle-bottom", pillRadius: 12,
+    fontFamily: "'Inter', sans-serif",
+  },
 ];
 
 const CAPTION_Y_FRACTION = { bottom: 0.93, "middle-bottom": 0.78, top: 0.12, center: 0.5 };
@@ -206,7 +235,8 @@ function drawFrame(ctx, video, canvas, colorAdjust, captions, t, zoomScale = 1, 
   const text = captionStyle.uppercase ? rawText.toUpperCase() : rawText;
   const fontSize = Math.max(14, Math.round(canvas.height * 0.045 * captionStyle.sizeScale));
   const fontFamily = captionStyle.fontFamily || "sans-serif";
-  ctx.font = `${captionStyle.weight} ${fontSize}px ${fontFamily}`;
+  const italicPrefix = captionStyle.italic ? "italic " : "";
+  ctx.font = `${italicPrefix}${captionStyle.weight} ${fontSize}px ${fontFamily}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const maxWidth = canvas.width * 0.94;
@@ -277,19 +307,28 @@ function drawFrame(ctx, video, canvas, colorAdjust, captions, t, zoomScale = 1, 
 
   // Modo normal: quebra em linhas se necessário
   const lines = wrapTextByWidth(ctx, text, maxWidth);
-  const lineHeight = fontSize * 1.15;
+  const lineHeight = fontSize * 1.20;
   const totalHeight = lineHeight * lines.length;
   const startY = centerY - totalHeight / 2 + lineHeight / 2;
 
-  if (captionStyle.bg) {
-    const paddingX = 24, paddingY = 12;
-    const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
+  // ==== Background: gradiente, cor sólida, ou nada ====
+  if (captionStyle.bg || captionStyle.bgGradient) {
+    const paddingX = 28, paddingY = 14;
+    const widest = Math.max(...lines.map((l) => measureTextWithSpacing(ctx, l, captionStyle.letterSpacing, fontSize)));
     const boxWidth = widest + paddingX * 2;
     const boxHeight = totalHeight + paddingY * 2;
     const boxX = canvas.width / 2 - boxWidth / 2;
     const boxY = centerY - boxHeight / 2;
     const radius = captionStyle.pillRadius ?? 12;
-    ctx.fillStyle = captionStyle.bg;
+    let fill;
+    if (captionStyle.bgGradient) {
+      fill = ctx.createLinearGradient(boxX, boxY, boxX + boxWidth, boxY);
+      fill.addColorStop(0, captionStyle.bgGradient.from);
+      fill.addColorStop(1, captionStyle.bgGradient.to);
+    } else {
+      fill = captionStyle.bg;
+    }
+    ctx.fillStyle = fill;
     if (ctx.roundRect) {
       ctx.beginPath();
       ctx.roundRect(boxX, boxY, boxWidth, boxHeight, Math.min(radius, boxHeight / 2));
@@ -297,24 +336,135 @@ function drawFrame(ctx, video, canvas, colorAdjust, captions, t, zoomScale = 1, 
     } else {
       ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
     }
+    if (captionStyle.borderColor && captionStyle.borderWidth) {
+      ctx.lineWidth = captionStyle.borderWidth;
+      ctx.strokeStyle = captionStyle.borderColor;
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, Math.min(radius, boxHeight / 2));
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+      }
+    }
   }
+
+  // ==== Palavras em destaque (accent) ====
+  // Se accentTarget definido, marca as palavras a destacar em cada linha
+  const accentWordIdx = pickAccentWordIndex(text, captionStyle.accentTarget);
 
   lines.forEach((line, i) => {
     const y = startY + i * lineHeight;
-    if (captionStyle.strokeColor && captionStyle.strokeWidth) {
-      ctx.lineJoin = "round";
-      ctx.miterLimit = 2;
-      ctx.lineWidth = captionStyle.strokeWidth;
-      ctx.strokeStyle = captionStyle.strokeColor;
-      applyShadowFor(ctx, captionStyle);
-      ctx.strokeText(line, canvas.width / 2, y);
-      clearShadow(ctx);
-    }
-    applyShadowFor(ctx, captionStyle);
-    ctx.fillStyle = captionStyle.textColor;
-    ctx.fillText(line, canvas.width / 2, y);
-    clearShadow(ctx);
+    drawStyledLine(ctx, line, canvas.width / 2, y, captionStyle, fontSize, accentWordIdx, text);
   });
+}
+
+function pickAccentWordIndex(fullText, target) {
+  if (!target) return -1;
+  const words = fullText.trim().split(/\s+/);
+  if (target === "last") return words.length - 1;
+  if (target === "first") return 0;
+  return -1;
+}
+
+function measureTextWithSpacing(ctx, text, letterSpacing, fontSize) {
+  if (!letterSpacing) return ctx.measureText(text).width;
+  let w = 0;
+  const spacing = letterSpacing * fontSize;
+  for (const ch of text) w += ctx.measureText(ch).width + spacing;
+  return w - spacing; // último char não soma spacing
+}
+
+function drawStyledLine(ctx, line, cxCenter, y, style, fontSize, accentWordIdx, fullText) {
+  // Extrai palavras da linha e identifica quais são "accent" comparando
+  // com o índice no texto completo.
+  const fullWords = fullText.trim().split(/\s+/);
+  const lineWords = line.trim().split(/\s+/);
+  const firstIdxInFull = fullWords.findIndex((w, k) => {
+    for (let j = 0; j < lineWords.length; j++) {
+      if (fullWords[k + j] !== lineWords[j]) return false;
+    }
+    return true;
+  });
+
+  const spacing = (style.letterSpacing || 0) * fontSize;
+  const spaceW = ctx.measureText(" ").width + spacing * 2;
+
+  // Mede cada palavra da linha (com letter-spacing se aplicável)
+  const wordWidths = lineWords.map((w) => measureTextWithSpacing(ctx, w, style.letterSpacing, fontSize));
+  const totalLineWidth = wordWidths.reduce((s, w) => s + w, 0) + spaceW * (lineWords.length - 1);
+  let x = cxCenter - totalLineWidth / 2;
+
+  ctx.textAlign = "left";
+
+  // Stroke primeiro pra toda a linha (efeito outline sob o fill)
+  if (style.strokeColor && style.strokeWidth) {
+    ctx.lineJoin = "round";
+    ctx.miterLimit = 2;
+    ctx.lineWidth = style.strokeWidth;
+    ctx.strokeStyle = style.strokeColor;
+    let xs = x;
+    lineWords.forEach((w, k) => {
+      applyShadowFor(ctx, style);
+      strokeWithSpacing(ctx, w, xs, y, spacing);
+      clearShadow(ctx);
+      xs += wordWidths[k] + spaceW;
+    });
+  }
+
+  // Fill (com accent bg / accent color quando aplicável)
+  lineWords.forEach((w, k) => {
+    const globalIdx = firstIdxInFull >= 0 ? firstIdxInFull + k : -1;
+    const isAccent = globalIdx === accentWordIdx;
+    const wWidth = wordWidths[k];
+
+    // Accent bg (pill atrás da palavra em destaque)
+    if (isAccent && style.accentBg) {
+      const padX = fontSize * 0.20, padY = fontSize * 0.10;
+      const bgX = x - padX;
+      const bgY = y - fontSize / 2 - padY + fontSize * 0.08;
+      const bgW = wWidth + padX * 2;
+      const bgH = fontSize + padY * 2;
+      const r = Math.min(bgH / 2, 8);
+      ctx.fillStyle = style.accentBg;
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(bgX, bgY, bgW, bgH, r);
+        ctx.fill();
+      } else {
+        ctx.fillRect(bgX, bgY, bgW, bgH);
+      }
+    }
+
+    applyShadowFor(ctx, style);
+    const wColor = isAccent
+      ? (style.accentTextColor || style.accentColor || style.textColor)
+      : style.textColor;
+    ctx.fillStyle = wColor;
+    fillWithSpacing(ctx, w, x, y, spacing);
+    clearShadow(ctx);
+
+    x += wWidth + spaceW;
+  });
+
+  ctx.textAlign = "center";
+}
+
+function fillWithSpacing(ctx, text, x, y, spacing) {
+  if (!spacing) { ctx.fillText(text, x, y); return; }
+  let cx = x;
+  for (const ch of text) {
+    ctx.fillText(ch, cx, y);
+    cx += ctx.measureText(ch).width + spacing;
+  }
+}
+function strokeWithSpacing(ctx, text, x, y, spacing) {
+  if (!spacing) { ctx.strokeText(text, x, y); return; }
+  let cx = x;
+  for (const ch of text) {
+    ctx.strokeText(ch, cx, y);
+    cx += ctx.measureText(ch).width + spacing;
+  }
 }
 
 function applyShadowFor(ctx, style) {
@@ -496,18 +646,18 @@ const COLOR_GRADE_OPTIONS = [
 ];
 
 const VIDEO_TYPES = [
-  { id: "educacional", label: "Conteúdo Educacional", desc: "Otimizado para ensino", icon: GraduationCap, bias: { cutPace: ["medio"], zoom: ["leve", "medio"], color: ["neutro"], captionIds: ["classic", "brand"] } },
-  { id: "autoridade", label: "Autoridade", desc: "Posicionamento e credibilidade", icon: ShieldCheck, bias: { cutPace: ["medio", "suave"], zoom: ["leve"], color: ["neutro", "frio"], captionIds: ["classic", "brand"] } },
-  { id: "storytelling", label: "Storytelling", desc: "Histórias que prendem atenção", icon: BookOpen, bias: { cutPace: ["suave", "medio"], zoom: ["leve", "medio"], color: ["quente", "neutro"], captionIds: ["classic", "minimal"] } },
-  { id: "viral", label: "Viral / Retenção", desc: "Máxima retenção e dinamismo", icon: Flame, bias: { cutPace: ["rapido"], zoom: ["forte"], color: ["vivido"], captionIds: ["impact", "yellow"] } },
-  { id: "redes_sociais", label: "Redes Sociais", desc: "Reels, TikTok e Shorts", icon: Heart, bias: { cutPace: ["rapido", "medio"], zoom: ["medio", "forte"], color: ["vivido"], captionIds: ["yellow", "impact"] } },
-  { id: "personal_brand", label: "Personal Brand", desc: "Conteúdo pessoal e autêntico", icon: User, bias: { cutPace: ["medio"], zoom: ["leve"], color: ["neutro", "quente"], captionIds: ["classic", "minimal"] } },
-  { id: "vendas", label: "Vendas", desc: "Foco em conversão", icon: ShoppingBag, bias: { cutPace: ["rapido", "rapido", "medio"], zoom: ["forte", "medio"], color: ["vivido", "quente"], captionIds: ["impact", "yellow"] } },
-  { id: "tiktok_shop", label: "TikTok Shop / Produto", desc: "Feito para vender produtos", icon: ShoppingCart, bias: { cutPace: ["rapido"], zoom: ["forte"], color: ["vivido"], captionIds: ["yellow", "impact"] } },
-  { id: "marketing", label: "Marketing & Anúncios", desc: "Criativos para performance", icon: Megaphone, bias: { cutPace: ["rapido", "medio"], zoom: ["medio", "forte"], color: ["vivido", "quente"], captionIds: ["impact", "yellow"] } },
-  { id: "podcast", label: "Podcast / Cortes", desc: "Conversas em conteúdo viral", icon: Mic, bias: { cutPace: ["suave", "medio"], zoom: ["leve"], color: ["neutro"], captionIds: ["classic", "minimal"] } },
-  { id: "vlog", label: "Vlog / Lifestyle", desc: "Pessoal, dinâmico e imersivo", icon: Camera, bias: { cutPace: ["medio"], zoom: ["medio"], color: ["quente"], captionIds: ["minimal", "classic"] } },
-  { id: "corporativo", label: "Corporativo", desc: "Profissional e institucional", icon: Briefcase, bias: { cutPace: ["medio", "suave"], zoom: ["leve"], color: ["neutro", "frio"], captionIds: ["classic", "brand"] } },
+  { id: "educacional", label: "Conteúdo Educacional", desc: "Otimizado para ensino", icon: GraduationCap, bias: { cutPace: ["medio"], zoom: ["leve", "medio"], color: ["neutro"], captionIds: ["classico", "clean"] } },
+  { id: "autoridade", label: "Autoridade", desc: "Posicionamento e credibilidade", icon: ShieldCheck, bias: { cutPace: ["medio", "suave"], zoom: ["leve"], color: ["neutro", "frio"], captionIds: ["classico", "clean"] } },
+  { id: "storytelling", label: "Storytelling", desc: "Histórias que prendem atenção", icon: BookOpen, bias: { cutPace: ["suave", "medio"], zoom: ["leve", "medio"], color: ["quente", "neutro"], captionIds: ["classico", "minimalista"] } },
+  { id: "viral", label: "Viral / Retenção", desc: "Máxima retenção e dinamismo", icon: Flame, bias: { cutPace: ["rapido"], zoom: ["forte"], color: ["vivido"], captionIds: ["bold", "destaque"] } },
+  { id: "redes_sociais", label: "Redes Sociais", desc: "Reels, TikTok e Shorts", icon: Heart, bias: { cutPace: ["rapido", "medio"], zoom: ["medio", "forte"], color: ["vivido"], captionIds: ["destaque", "bold"] } },
+  { id: "personal_brand", label: "Personal Brand", desc: "Conteúdo pessoal e autêntico", icon: User, bias: { cutPace: ["medio"], zoom: ["leve"], color: ["neutro", "quente"], captionIds: ["classico", "minimalista"] } },
+  { id: "vendas", label: "Vendas", desc: "Foco em conversão", icon: ShoppingBag, bias: { cutPace: ["rapido", "rapido", "medio"], zoom: ["forte", "medio"], color: ["vivido", "quente"], captionIds: ["bold", "destaque"] } },
+  { id: "tiktok_shop", label: "TikTok Shop / Produto", desc: "Feito para vender produtos", icon: ShoppingCart, bias: { cutPace: ["rapido"], zoom: ["forte"], color: ["vivido"], captionIds: ["destaque", "bold"] } },
+  { id: "marketing", label: "Marketing & Anúncios", desc: "Criativos para performance", icon: Megaphone, bias: { cutPace: ["rapido", "medio"], zoom: ["medio", "forte"], color: ["vivido", "quente"], captionIds: ["bold", "destaque"] } },
+  { id: "podcast", label: "Podcast / Cortes", desc: "Conversas em conteúdo viral", icon: Mic, bias: { cutPace: ["suave", "medio"], zoom: ["leve"], color: ["neutro"], captionIds: ["classico", "minimalista"] } },
+  { id: "vlog", label: "Vlog / Lifestyle", desc: "Pessoal, dinâmico e imersivo", icon: Camera, bias: { cutPace: ["medio"], zoom: ["medio"], color: ["quente"], captionIds: ["minimalista", "classico"] } },
+  { id: "corporativo", label: "Corporativo", desc: "Profissional e institucional", icon: Briefcase, bias: { cutPace: ["medio", "suave"], zoom: ["leve"], color: ["neutro", "frio"], captionIds: ["classico", "clean"] } },
 ];
 
 const VIDEO_TYPE_GROUPS = [
@@ -602,7 +752,7 @@ export default function AiVideoEditor() {
   const [generatingCaptions, setGeneratingCaptions] = useState(false);
   const [captionError, setCaptionError] = useState("");
   const [maxCaptionWords, setMaxCaptionWords] = useState(8);
-  const [captionStyleId, setCaptionStyleId] = useState("classic");
+  const [captionStyleId, setCaptionStyleId] = useState("classico");
   const captionStyle = CAPTION_STYLES.find((s) => s.id === captionStyleId) || CAPTION_STYLES[0];
 
   const [findingMistakes, setFindingMistakes] = useState(false);
@@ -657,7 +807,7 @@ export default function AiVideoEditor() {
   const [smartZoomEnabled, setSmartZoomEnabled] = useState(true);
   // Legendas automáticas
   const [autoCaptionsEnabled, setAutoCaptionsEnabled] = useState(false);
-  const [captionStylePreset, setCaptionStylePreset] = useState("classic");
+  const [captionStylePreset, setCaptionStylePreset] = useState("classico");
   const [captionPosition, setCaptionPosition] = useState("bottom");
   // Debug panel só aparece com ?debug=1 na URL.
   const debugMode = typeof window !== "undefined" && window.location.search.includes("debug=1");
