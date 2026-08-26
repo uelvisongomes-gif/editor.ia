@@ -8,38 +8,33 @@ import { callLLM, extractJSON } from "./llmClient.js";
 
 const PROMPT_TEMPLATE = (indexedWords) => `Você é um editor de vídeo experiente em português brasileiro. Abaixo está a transcrição de uma fala, com cada palavra numerada pelo índice (começando em 0), separada por espaços.
 
-Identifique APENAS defeitos de fala pontuais que devem ser cortados. Categorias:
+Identifique defeitos de fala que devem ser cortados. Categorias:
 
 - "stutter": gagueira ou repetição imediata acidental ("eu eu acho", "vamos vamos fazer").
 - "false_start": começo falso corrigido logo depois ("na terça- na quarta-feira").
 - "abandoned_phrase": frase incompleta que a pessoa abandona e reinicia logo em seguida.
   Exemplo: "Hoje eu vou mostrar... não, pera... Hoje eu vou ensinar..."
-  Aqui o trecho "Hoje eu vou mostrar... não, pera..." vai como abandoned_phrase.
+  Marque APENAS "Hoje eu vou mostrar... não, pera..." como abandoned_phrase.
   A versão correta ("Hoje eu vou ensinar...") DEVE PERMANECER.
 - "self_correction": pessoa afirma algo e imediatamente se corrige.
-  Exemplo: "é vermelho, não, é azul" — o "é vermelho, não," é self_correction.
-- "filler": cadeia CURTA de muletas ("é... tipo... né, sabe").
+  Exemplo: "é vermelho, não, é azul" — marque "é vermelho, não," como self_correction.
+- "filler": cadeia de muletas seguidas ("é... tipo... né, sabe").
 
-REGRAS CRÍTICAS:
-1. DEFEITO DE FALA É CURTO. Cada corte deve ter no máximo ~15 palavras (~3-4 segundos). Se um trecho parece um "erro" mas tem mais que isso, é conteúdo real — NÃO marque.
-2. Só marque quando houver EVIDÊNCIA CLARA de reinício, gagueira ou correção. Não invente erros para "melhorar" o vídeo.
-3. Quando houver uma versão errada seguida de versão correta, marque só a errada. Na dúvida, prefira a versão MAIS COMPLETA para permanecer.
-4. NA DÚVIDA, NÃO MARQUE. É melhor manter uma pausa desnecessária do que remover uma frase real.
+REGRA DE DURAÇÃO (importante):
+Cada corte deve ter NO MÁXIMO 15 palavras. Se um trecho "parece" um erro mas tem mais que isso, provavelmente é conteúdo real reiniciado — NÃO marque. O usuário pode cortar manualmente se quiser.
 
 NÃO marque:
-- Uma única muleta isolada ("né", "tipo", "sabe").
-- Ênfases naturais ou repetições retóricas propositais ("muito, muito importante").
-- Pausas para respirar.
+- Uma única muleta isolada ("né", "tipo", "sabe") — ok em fala natural.
+- Ênfases naturais ou repetições retóricas ("muito, muito importante").
+- Pausas para respirar (outro módulo cuida).
 - Correções de conteúdo que a pessoa QUER manter.
-- Blocos longos com mais de 15 palavras — mesmo que "pareça" reiniciado.
-- Recomeços narrativos legítimos (a pessoa fala uma coisa, faz outra observação, e volta ao tema — isso é oratória, não erro).
 
 Responda APENAS com um array JSON válido, sem markdown, no formato exato:
 [{"startWord":0,"endWord":2,"reason":"stutter","confidence":0.9,"replacementNote":"tentativa correta em ..."}]
 
 - reason ∈ {"stutter","filler","false_start","abandoned_phrase","self_correction"}
-- confidence: use >= 0.90 só quando for absolutamente evidente; 0.75-0.89 quando for claro mas com pouca ambiguidade; abaixo de 0.75 quando tiver qualquer dúvida (nesses casos, prefira NÃO marcar).
-- replacementNote é opcional: quando o corte é uma tentativa errada seguida da versão correta, escreva uma referência curta à versão que deve permanecer.
+- confidence: >= 0.85 quando evidente, 0.65-0.84 quando claro mas com alguma ambiguidade, < 0.65 quando tiver dúvida real (nesses casos, prefira NÃO marcar).
+- replacementNote é opcional: quando é uma tentativa errada seguida da versão correta, refira brevemente a versão preservada.
 
 Se não houver nenhum defeito claro, responda [].
 

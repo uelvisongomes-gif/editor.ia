@@ -39,40 +39,38 @@ function preSegmentSentences(words) {
   return sentences;
 }
 
-const PROMPT = (sentencesJson, topicHint) => `Você é um editor de vídeo especialista em conteúdo falado em português brasileiro. Você é EXTREMAMENTE CONSERVADOR: a regra número um é "na dúvida, MANTER".
+const PROMPT = (sentencesJson, topicHint) => `Você é um editor de vídeo experiente em português brasileiro. Sua meta é enxugar o vídeo SEM comprometer a narrativa. Marque o que for genuinamente removível; quando estiver em dúvida real, deixe como "review" para o usuário decidir.
 
-Recebe abaixo uma lista de sentenças numeradas extraídas da fala de UM vídeo. Sua tarefa é:
+Recebe abaixo uma lista de sentenças numeradas extraídas da fala de UM vídeo. Retorne:
 
-1. Identificar o ASSUNTO PRINCIPAL do vídeo (uma frase).
-2. Para cada sentença, retornar:
+1. "topic": ASSUNTO PRINCIPAL do vídeo (uma frase curta).
+2. "sentences": para cada sentença, retornar:
    - "index": índice recebido.
-   - "role": papel narrativo dentro do vídeo. Um de:
+   - "role": papel narrativo — um de:
        "hook"        (abertura que prende atenção)
        "context"     (situa o assunto)
        "development" (explicação/desenvolvimento)
-       "point"       (ponto importante/insight/exemplo)
+       "point"       (insight/exemplo/ponto principal)
        "conclusion"  (encerramento do raciocínio)
-       "cta"         (chamada para ação, "curte", "segue", "compra", "link")
-       "aside"       (comentário paralelo, digressão curta)
-       "off_topic"   (FORA do assunto principal — use com muita cautela)
+       "cta"         (chamada para ação)
+       "aside"       (comentário paralelo breve)
+       "off_topic"   (fora do assunto — use com cuidado)
    - "importance": "high" | "medium" | "low".
-   - "dependsOnPrev": true se a sentença só faz sentido junto da imediatamente anterior. Se houver qualquer chance, prefira true.
+   - "dependsOnPrev": true se a sentença só faz sentido junto da imediatamente anterior (pronome sem antecedente, "isso", "essa parte", conclusão que precisa do exemplo anterior).
    - "keepAdvice": "keep" | "trim" | "consider_remove" | "review".
 
-3. "repeatedGroups": conjuntos de sentenças que exprimem A MESMA IDEIA de formas diferentes E QUE PODEM SUBSTITUIR UMA À OUTRA sem perda. Para cada grupo, escolha "bestIndex" — a mais clara. As demais são candidatas a remoção.
+3. "repeatedGroups": conjuntos de sentenças que exprimem A MESMA IDEIA de formas parecidas e PODEM SUBSTITUIR UMA À OUTRA. Para cada grupo, escolha "bestIndex" (a versão mais clara). As demais são candidatas a remoção. NÃO agrupe complementos (ex: "vender por vídeo" + "vender por live" — são coisas diferentes, não repetição).
 
-4. "offTopicIndexes": sentenças CLARAMENTE fora do assunto principal (conversas paralelas, interrupções, pensamentos abandonados). NÃO liste sentenças que são exemplos, histórias, comparações, contextualizações ou reforços — mesmo que pareçam laterais, elas geralmente sustentam o argumento.
+4. "offTopicIndexes": sentenças que NÃO tocam o assunto principal. Uma história curta que ilustra o ponto NÃO é off-topic. Uma digressão evidente (interrompeu para falar de outra coisa) É.
 
-REGRAS DE OURO (ordem de prioridade):
-1. NA DÚVIDA, USE "keep" ou "review". Nunca "consider_remove".
-2. Uma frase que reforça, exemplifica, contextualiza ou complementa NÃO É REPETIÇÃO — é oratória. Não a marque como repeated_idea.
-3. Um trecho aparentemente lateral pode ser história/exemplo/prova — não é off_topic. Só liste em offTopicIndexes se for evidentemente uma conversa paralela ou interrupção que não pertence ao vídeo.
-4. Não sugira remover uma sentença que introduz o tópico da próxima.
-5. Não sugira remover uma sentença que termina em conector aberto (porque, pois, mas, como, então).
-6. Pausas dramáticas ou respirações NÃO são conteúdo — silêncios são decididos por outro módulo.
-7. Se dois trechos falam de coisas complementares (ex: "vender por vídeo" + "vender por live"), NÃO os agrupe em repeatedGroups — são complementos, não redundância.
+REGRAS:
+- Prefira "consider_remove" apenas quando tiver certeza de que a sentença é dispensável e a remoção não vai quebrar o que vem depois.
+- Se a próxima sentença começa com "isso/ele/então/por isso/essa parte", a atual NÃO deve ser consider_remove.
+- Se a sentença atual termina em conector aberto (porque, pois, mas, como), NÃO marque consider_remove.
+- Pausas e silêncios são decididos por outro módulo — ignore.
+- Reforço narrativo ("isso é muito importante") não é repetição se estiver enfatizando; só marque como repeated_idea quando UMA versão substitui a outra sem perda.
 
-${topicHint ? `Contexto: o vídeo aparenta ser sobre "${topicHint}". Só marque off_topic quando a sentença for CLARAMENTE desconectada disso — não quando ela apenas explora um ângulo diferente do mesmo tema.` : ""}
+${topicHint ? `Contexto: o vídeo aparenta ser sobre "${topicHint}". Off_topic só quando claramente desconectado disso.` : ""}
 
 Responda APENAS com um JSON válido, sem markdown, no formato exato:
 {
