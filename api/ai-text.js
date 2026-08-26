@@ -1,5 +1,7 @@
-// Chat-completion endpoint. Now passes back the token usage the model
-// reported so the client can log real cost per project.
+// Chat-completion endpoint. Protegido por authGuard: só usuário logado
+// com quota de llmCalls disponível chega no OpenAI.
+
+import { authGuard } from "./_lib/authGuard.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -13,6 +15,9 @@ export default async function handler(req, res) {
     });
     return;
   }
+
+  const guard = await authGuard(req, res, { require: "llmCalls" });
+  if (!guard) return; // 401/429 já respondido
 
   try {
     const { prompt, maxTokens } = req.body || {};
@@ -44,7 +49,9 @@ export default async function handler(req, res) {
       return;
     }
 
-    // usage is optional in some edge cases; keep the shape stable for the client.
+    // Grava 1 llmCall no usage do usuário (só se o retorno da OpenAI foi OK).
+    await guard.tick({ llmCalls: 1, meta: { model: data.model || "gpt-4o-mini", latencyMs } });
+
     const usage = data.usage || {};
     res.status(200).json({
       text: data.choices?.[0]?.message?.content || "",
@@ -55,6 +62,7 @@ export default async function handler(req, res) {
         totalTokens: usage.total_tokens ?? null,
         latencyMs,
       },
+      quota: guard.quota,
     });
   } catch (err) {
     console.error("AI text error:", err);

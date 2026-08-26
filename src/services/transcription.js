@@ -3,6 +3,8 @@
 // Both onUsage(entry) and signal (AbortController) are propagated so the
 // pipeline can measure cost and let the user cancel a long transcription.
 
+import { getAccessToken } from "./auth/authProvider.js";
+
 async function extractAudioBlob(videoUrl) {
   const resp = await fetch(videoUrl);
   const arrayBuf = await resp.arrayBuffer();
@@ -36,12 +38,20 @@ async function extractAudioBlob(videoUrl) {
 }
 
 async function whisperProvider(audioBlob, { signal, onUsage } = {}) {
+  const token = await getAccessToken();
+  const headers = { "Content-Type": audioBlob.type || "audio/webm" };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const resp = await fetch("/api/transcribe", {
     method: "POST",
-    headers: { "Content-Type": audioBlob.type || "audio/webm" },
+    headers,
     body: audioBlob,
     signal,
   });
+  if (resp.status === 401) throw new Error("Você precisa entrar para transcrever.");
+  if (resp.status === 429) {
+    const data = await resp.json().catch(() => ({}));
+    throw new Error(data?.error || "Quota mensal de transcrição esgotada.");
+  }
   const data = await resp.json();
   if (!resp.ok) {
     throw new Error(data?.error?.message || data?.error || "Falha na transcrição.");

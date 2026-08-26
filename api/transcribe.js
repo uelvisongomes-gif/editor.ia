@@ -1,12 +1,9 @@
-// Transcription endpoint. Whisper's verbose_json includes duration; we
-// return it separately so the client can bill by minute (Whisper is
-// per-minute-of-audio, not per-token).
+// Transcription endpoint. Whisper cobra por minuto de áudio — a quota
+// deste endpoint é transcriptionMinutes.
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+import { authGuard } from "./_lib/authGuard.js";
+
+export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -20,6 +17,9 @@ export default async function handler(req, res) {
     });
     return;
   }
+
+  const guard = await authGuard(req, res, { require: "transcriptionMinutes" });
+  if (!guard) return;
 
   try {
     const chunks = [];
@@ -38,12 +38,7 @@ export default async function handler(req, res) {
     form.append("model", "whisper-1");
     form.append("response_format", "verbose_json");
     form.append("timestamp_granularities[]", "word");
-    // Baixa temperatura para reduzir "criatividade" do Whisper — melhora
-    // fidelidade e tende a manter gagueiras/muletas em vez de suavizar.
     form.append("temperature", "0");
-    // Prompt de estilo: reforça que a transcrição deve preservar
-    // disfluências. Whisper usa este texto como pista de estilo/vocabulário.
-    // Ele NÃO é adicionado ao output — só influencia como o modelo decodifica.
     form.append(
       "prompt",
       "Transcrição literal de fala em português brasileiro, preservando repetições de palavras, muletas (é, tipo, né), hesitações (ah, uh, hum) e falsos começos exatamente como falados. Não normalize."
@@ -67,13 +62,20 @@ export default async function handler(req, res) {
       return;
     }
 
-    // Attach billing hints without changing the existing shape the client already reads.
+    const audioMinutes = typeof data.duration === "number" ? data.duration / 60 : 0;
+    // Ticka os minutos reais que a OpenAI reportou — cobrança fiel.
+    await guard.tick({
+      transcriptionMinutes: audioMinutes,
+      meta: { audioBytes: buffer.length, latencyMs },
+    });
+
     data._usage = {
       model: "whisper-1",
       audioDurationSec: typeof data.duration === "number" ? data.duration : null,
       audioBytes: buffer.length,
       latencyMs,
     };
+    data._quota = guard.quota;
     res.status(200).json(data);
   } catch (err) {
     console.error("Transcription error:", err);

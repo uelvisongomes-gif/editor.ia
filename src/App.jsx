@@ -11,6 +11,7 @@ import { runEditingPipeline } from "./services/pipeline.js";
 import { EDITING_PROFILES, DEFAULT_PROFILE_ID } from "./services/editingProfiles.js";
 import { EdlReview } from "./components/EdlReview.jsx";
 import { ProblemsFound } from "./components/ProblemsFound.jsx";
+import { AuthGate } from "./components/AuthGate.jsx";
 import { createHistory, pushState, undo as undoHistory, redo as redoHistory, canUndo, canRedo } from "./services/edlHistory.js";
 import { createUsageLog, addUsageEntry, summarizeUsage } from "./services/usageLog.js";
 import { buildProjectSnapshot, saveProject, loadProject, listProjects, deleteProject } from "./services/projectRepository.js";
@@ -1715,12 +1716,23 @@ async function callMistakeDetectionAPI(words) {
       }
       const ctx = canvas.getContext("2d");
       const canvasStream = canvas.captureStream(30);
+      // D10: se o áudio não for capturado, FALHA VISÍVEL. Antes esse
+      // catch engolia o erro e exportava mudo em silêncio — usuário só
+      // descobria ao abrir o arquivo. Ruim demais pra deixar assim.
+      let audioCaptureError = null;
       try {
         const vStream = video.captureStream ? video.captureStream() : video.mozCaptureStream();
         const audioTracks = vStream.getAudioTracks();
-        if (audioTracks.length) canvasStream.addTrack(audioTracks[0]);
+        if (audioTracks.length === 0) {
+          audioCaptureError = "O vídeo carregado não tem faixa de áudio detectável (pode ser codec não suportado, ex: HEVC/H.265 do iPhone).";
+        } else {
+          canvasStream.addTrack(audioTracks[0]);
+        }
       } catch (err) {
-        console.warn("Áudio não incluído na exportação:", err);
+        audioCaptureError = `Não foi possível capturar o áudio deste vídeo neste navegador (${err?.message || err}). Tente converter o arquivo para MP4/H.264 antes de importar.`;
+      }
+      if (audioCaptureError) {
+        throw new Error("Exportação abortada: " + audioCaptureError + " Sem isso o vídeo sairia mudo.");
       }
       const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
         ? "video/webm;codecs=vp9,opus"
@@ -1843,6 +1855,7 @@ async function callMistakeDetectionAPI(words) {
               {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
               {expanded ? "Sair da tela cheia" : "Tela cheia"}
             </button>
+            <AuthGate />
           </div>
         </header>
 
