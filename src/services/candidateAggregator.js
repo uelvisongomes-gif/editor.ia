@@ -27,6 +27,7 @@ const MERGE_OVERLAP_RATIO = 0.5;
 
 const SURGICAL_ERROR_REASONS = new Set([
   "stutter", "false_start", "abandoned_phrase", "self_correction", "filler",
+  "silence", "no_speech", "long_pause",
 ]);
 
 // Enumeração cross-sentença ("falta ideia, falta jeito, falta técnica,

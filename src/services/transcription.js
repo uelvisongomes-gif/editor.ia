@@ -63,11 +63,15 @@ async function whisperProvider(audioBlob, { signal, onUsage } = {}) {
       console.warn("onUsage callback failed:", err);
     }
   }
-  return (data.words || []).map((w) => ({
+  const words = (data.words || []).map((w) => ({
     word: (w.word || "").trim(),
     start: Number(w.start),
     end: Number(w.end),
   }));
+  if (typeof console !== "undefined" && data._source) {
+    console.log(`[transcription] source=${data._source} rawWords=${data._rawWhisperWords} finalWords=${words.length}`);
+  }
+  return words;
 }
 
 export async function transcribe(videoUrl, { provider = whisperProvider, signal, onUsage } = {}) {

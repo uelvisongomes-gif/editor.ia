@@ -166,7 +166,7 @@ function applySafetyValidators(items, { duration }) {
   // que a gente quer cortar — o vídeo começa limpo, no conteúdo real.
   // O "abrupt_open" só se aplica se o corte inicial for conteúdo (repeated
   // idea, off_topic) ou algo grande demais pra ser considerado só travada.
-  const OPENING_CUT_REASONS_SAFE = new Set(["filler", "stutter", "false_start", "abandoned_phrase", "long_pause", "silence"]);
+  const OPENING_CUT_REASONS_SAFE = new Set(["filler", "stutter", "false_start", "abandoned_phrase", "long_pause", "silence", "no_speech"]);
   const openingIsHesitation = (it) => OPENING_CUT_REASONS_SAFE.has(it.reason) && (it.end - it.start) <= 4.0;
 
   if (items[0].action !== "keep") {

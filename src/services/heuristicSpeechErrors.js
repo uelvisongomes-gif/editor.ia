@@ -60,6 +60,55 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
   const norm = words.map((w) => normalize(w.word));
   const results = [];
 
+  // 0.PRE) NO_SPEECH INICIAL: se a primeira palavra transcrita começa
+  //     depois de N segundos (default 0.8s) e não há nenhuma palavra antes,
+  //     o intervalo 0→(primeira palavra - margem) é background/pre-roll
+  //     sem fala útil. Diferente de "hesitação inicial" — aqui não é fala,
+  //     é ruído/respiração/ambiente. Sempre presente independente de
+  //     waveform (não depende de amplitude zero).
+  {
+    const PRE_ROLL_MARGIN = 0.15;   // deixa 150ms antes da 1ª palavra
+    const MIN_PRE_ROLL = 0.5;       // < 0.5s não vale cortar
+    if (words.length > 0 && words[0].start >= MIN_PRE_ROLL + PRE_ROLL_MARGIN) {
+      results.push({
+        start: 0,
+        end: words[0].start - PRE_ROLL_MARGIN,
+        confidence: 0.92,
+        reason: "no_speech",
+        source: "speechError",
+        detectedBy: "heuristic",
+        text: "(pre-roll sem fala — ruído/ambiente)",
+      });
+    }
+  }
+
+  // 0.GAP) GAP ENTRE PALAVRAS COMO SILÊNCIO: quando existe intervalo >= 0.7s
+  //      entre o end de uma palavra e o start da próxima, esse gap é
+  //      espaço morto — mesmo que haja respiração ou som de boca, não é
+  //      conteúdo falado. Cortar deixa a fala mais fluida.
+  {
+    const MIN_GAP = 0.7;
+    const EDGE_MARGIN = 0.1;
+    for (let i = 0; i < words.length - 1; i++) {
+      const w = words[i];
+      const nx = words[i + 1];
+      const gap = nx.start - w.end;
+      if (gap < MIN_GAP) continue;
+      const cutStart = w.end + EDGE_MARGIN;
+      const cutEnd = nx.start - EDGE_MARGIN;
+      if (cutEnd - cutStart < 0.3) continue;
+      results.push({
+        start: cutStart,
+        end: cutEnd,
+        confidence: 0.85,
+        reason: "silence",
+        source: "speechError",
+        detectedBy: "heuristic",
+        text: `(pausa entre palavras — ${gap.toFixed(1)}s)`,
+      });
+    }
+  }
+
   // 0) SOM SEM PALAVRA (waveform + words) — pega "Éeeee...", "aaah",
   //    "hmmmm" que o Whisper suavizou ou pulou. Estratégia:
   //    procuramos janelas do waveform com energia >= threshold que NÃO
