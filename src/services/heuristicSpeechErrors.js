@@ -52,12 +52,46 @@ function normalize(w) {
 
 /**
  * @param {Array<{word:string,start:number,end:number}>} words
+ * @param {{waveform?: Array<{start:number,end:number,level:number}>}} [opts]
  * @returns {Array<{start:number,end:number,confidence:number,reason:string,source:'speechError',text:string}>}
  */
-export function detectSpeechErrorsHeuristic(words) {
+export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
   if (!words?.length) return [];
   const norm = words.map((w) => normalize(w.word));
   const results = [];
+
+  // 0) SOM ANTES DA PRIMEIRA PALAVRA — o "Éeeee..." que o Whisper
+  //    frequentemente não transcreve ou transcreve como "é" curto.
+  //    Se o waveform mostra energia acima de silêncio nos segundos que
+  //    ANTECEDEM a primeira palavra transcrita, marca essa janela como
+  //    hesitação prolongada.
+  if (waveform?.length && words[0].start > 0.4) {
+    const firstWordStart = words[0].start;
+    // Threshold de "com som": acima de 0.02 (mesmo do silence detector default).
+    // Procura o INÍCIO real da fala (primeira janela com som contínuo > 0.2s).
+    let soundStart = null;
+    for (const b of waveform) {
+      if (b.start >= firstWordStart) break;
+      if (b.level >= 0.02) {
+        if (soundStart == null) soundStart = b.start;
+      } else if (soundStart != null && b.start - soundStart >= 0.2) {
+        // Achou um bloco de som pré-fala com > 0.2s. Confirma se é
+        // longo o suficiente pra chamar de hesitação.
+        break;
+      }
+    }
+    if (soundStart != null && firstWordStart - soundStart >= 0.4) {
+      results.push({
+        start: soundStart,
+        end: firstWordStart - 0.05,
+        confidence: 0.9,
+        reason: "filler",
+        source: "speechError",
+        detectedBy: "heuristic",
+        text: "(hesitação inicial)",
+      });
+    }
+  }
 
   // 1) Repetição imediata de PALAVRA idêntica ("eu eu", "vou vou", "e e").
   //    Aceita repetições exatas — vale a partir de 2 iguais em sequência.
@@ -87,6 +121,43 @@ export function detectSpeechErrorsHeuristic(words) {
       } else {
         i += 1;
       }
+    }
+  }
+
+  // 1.5) BIGRAM/TRIGRAM repetido — "na maioria na maioria", "eu vou eu vou",
+  //      "isso porque isso porque". Pega padrões de 2-3 palavras que se
+  //      repetem imediatamente (típico de reinício acidental do apresentador).
+  //      Remove a PRIMEIRA ocorrência, deixa a segunda + o resto.
+  for (let ngram = 3; ngram >= 2; ngram--) {
+    let i = 0;
+    while (i <= words.length - ngram * 2) {
+      // Checa se palavras [i..i+ngram-1] == palavras [i+ngram..i+ngram*2-1]
+      let match = true;
+      for (let k = 0; k < ngram; k++) {
+        if (!norm[i + k] || norm[i + k] !== norm[i + ngram + k]) { match = false; break; }
+      }
+      if (match) {
+        // Gap entre as duas cópias precisa ser curto (<= 0.5s) — se for
+        // longo é reforço retórico ("primeiro X. depois X.")
+        const gap = words[i + ngram].start - words[i + ngram - 1].end;
+        if (gap <= 0.5) {
+          const start = words[i].start;
+          const end = words[i + ngram - 1].end;
+          if (end > start + 0.05) {
+            results.push({
+              start, end,
+              confidence: 0.88,
+              reason: "stutter",
+              source: "speechError",
+              detectedBy: "heuristic",
+              text: words.slice(i, i + ngram).map((w) => w.word).join(" "),
+            });
+            i += ngram * 2 - 1; // pula a repetição também
+            continue;
+          }
+        }
+      }
+      i += 1;
     }
   }
 

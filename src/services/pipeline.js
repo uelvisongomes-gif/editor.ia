@@ -84,7 +84,7 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   // Detecção dupla: heurística determinística SEMPRE + LLM em paralelo.
   // A heurística garante que gagueira/muletas/reinícios óbvios sejam pegos
   // mesmo quando o LLM devolve vazio. O merger da EDL dedupa por overlap.
-  const heuristicErrors = detectSpeechErrorsHeuristic(words);
+  const heuristicErrors = detectSpeechErrorsHeuristic(words, { waveform });
   console.log("[pipeline] heuristic speechErrors:", heuristicErrors.length, heuristicErrors);
   let llmErrors = [];
   try {
