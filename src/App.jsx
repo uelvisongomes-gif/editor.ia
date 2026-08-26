@@ -1334,6 +1334,68 @@ async function callMistakeDetectionAPI(words) {
     }, { label: "nudge_end", changedSegmentId: segId });
   };
 
+  // Drag handles nas bordas dos segmentos na timeline. Usa ref pra
+  // capturar bounds do container e converter pixels em segundos.
+  // Durante o drag atualiza segments direto (sem history); no mouseup
+  // finaliza com applySegmentsChange (1 entrada no history).
+  const timelineTrackRef = useRef(null);
+  const dragBoundaryRef = useRef(null); // { segId, edge, containerRect }
+
+  const beginBoundaryDrag = (e, segId, edge) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const container = timelineTrackRef.current;
+    if (!container || !duration) return;
+    const rect = container.getBoundingClientRect();
+    dragBoundaryRef.current = { segId, edge, rect };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  useEffect(() => {
+    const onMove = (e) => {
+      const st = dragBoundaryRef.current;
+      if (!st || !duration) return;
+      const { segId, edge, rect } = st;
+      const x = Math.min(Math.max(e.clientX - rect.left, 0), rect.width);
+      const t = (x / rect.width) * duration;
+      setSegments((segs) => {
+        const idx = segs.findIndex((s) => s.id === segId);
+        if (idx < 0) return segs;
+        const seg = segs[idx];
+        if (edge === "start") {
+          const prev = segs[idx - 1];
+          const minStart = prev ? prev.start + 0.05 : 0;
+          const nextStart = Math.max(minStart, Math.min(seg.end - 0.05, t));
+          const updated = segs.map((s) => (s.id === segId ? { ...s, start: nextStart } : s));
+          if (prev) updated[idx - 1] = { ...updated[idx - 1], end: nextStart };
+          return updated;
+        }
+        const next = segs[idx + 1];
+        const maxEnd = next ? next.end - 0.05 : duration;
+        const nextEnd = Math.min(maxEnd, Math.max(seg.start + 0.05, t));
+        const updated = segs.map((s) => (s.id === segId ? { ...s, end: nextEnd } : s));
+        if (next) updated[idx + 1] = { ...updated[idx + 1], start: nextEnd };
+        return updated;
+      });
+    };
+    const onUp = () => {
+      const st = dragBoundaryRef.current;
+      if (!st) return;
+      dragBoundaryRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      // Commit ao history (usa snapshot atual)
+      applySegmentsChange((segs) => segs, { label: "drag_boundary", changedSegmentId: st.segId });
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [duration]);
+
   const handlePlayRange = (start, end) => {
     const v = videoRef.current;
     if (!v) return;
@@ -2656,7 +2718,7 @@ async function callMistakeDetectionAPI(words) {
                     <div className="absolute left-0 right-0" style={{ top: 90, height: 22 }}>
                       <TrackLabel text="Cortes" />
                       <div className="absolute inset-0" style={{ paddingLeft: 46 }}>
-                        <div className="relative w-full h-full">
+                        <div className="relative w-full h-full" ref={timelineTrackRef}>
                           {segments.map((seg) => {
                             let bg;
                             if (seg.action === "review") {
@@ -2668,11 +2730,12 @@ async function callMistakeDetectionAPI(words) {
                             } else {
                               bg = "#378ADD";
                             }
+                            const canDrag = seg.deleted || seg.action === "review";
                             return (
                               <div
                                 key={seg.id}
                                 onClick={(e) => { e.stopPropagation(); setSelectedSegId(seg.id); handleSeek(seg.start); }}
-                                title={seg.action === "review" ? "A revisar" : seg.deleted ? "Será cortado" : "Mantido"}
+                                title={seg.action === "review" ? "A revisar — arraste as bordas pra ajustar" : seg.deleted ? "Será cortado — arraste as bordas pra ajustar" : "Mantido"}
                                 style={{
                                   position: "absolute",
                                   left: `${(seg.start / duration) * 100}%`,
@@ -2683,7 +2746,30 @@ async function callMistakeDetectionAPI(words) {
                                   borderRadius: 4,
                                   cursor: "pointer",
                                 }}
-                              />
+                              >
+                                {canDrag && (
+                                  <>
+                                    <div
+                                      onMouseDown={(e) => beginBoundaryDrag(e, seg.id, "start")}
+                                      title="Arrastar início do corte"
+                                      style={{
+                                        position: "absolute", left: -3, top: -2, bottom: -2, width: 8,
+                                        cursor: "col-resize", background: "transparent",
+                                        borderLeft: "2px solid rgba(255,255,255,0.85)", borderRadius: 2,
+                                      }}
+                                    />
+                                    <div
+                                      onMouseDown={(e) => beginBoundaryDrag(e, seg.id, "end")}
+                                      title="Arrastar fim do corte"
+                                      style={{
+                                        position: "absolute", right: -3, top: -2, bottom: -2, width: 8,
+                                        cursor: "col-resize", background: "transparent",
+                                        borderRight: "2px solid rgba(255,255,255,0.85)", borderRadius: 2,
+                                      }}
+                                    />
+                                  </>
+                                )}
+                              </div>
                             );
                           })}
                         </div>

@@ -16,16 +16,18 @@ const nextId = () => "zoom-" + _id++;
 
 // Níveis centralizados — perceptíveis a olho nu. Ajuste aqui pra
 // mudar o visual global.
+// Zoom in 30% mais forte que antes (a pedido do usuário). Multiplicativo
+// na escala pra impacto visível: 1.12 * 1.3 = 1.456 etc.
 export const ZOOM_LEVELS = {
-  light:  { value: 1.12, label: "Suave" },
-  medium: { value: 1.20, label: "Moderado" },
-  strong: { value: 1.30, label: "Forte" },
+  light:  { value: 1.46, label: "Suave" },       // era 1.12
+  medium: { value: 1.56, label: "Moderado" },    // era 1.20
+  strong: { value: 1.70, label: "Forte" },       // era 1.30
   // Zoom out — valores REPRESENTAM saída da imagem. O renderer converte
   // para escalas efetivas usando o BASE_ZOOM (ver base_zoom abaixo) pra
   // evitar borda preta.
-  out_light:  { value: 0.95, label: "Suave" },
-  out_medium: { value: 0.90, label: "Moderado" },
-  out_strong: { value: 0.85, label: "Forte" },
+  out_light:  { value: 0.93, label: "Suave" },
+  out_medium: { value: 0.87, label: "Moderado" },
+  out_strong: { value: 0.80, label: "Forte" },
 };
 
 // BASE_ZOOM: o preview começa levemente ampliado (~1.10). Isso garante
