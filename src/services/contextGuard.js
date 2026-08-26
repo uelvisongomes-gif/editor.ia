@@ -148,6 +148,33 @@ export function evaluateContext({ candidate, sentences }) {
     return { ok: false, reason: "role_protected", matched: target.role };
   }
 
+  // Rule 4.4: ENUMERAÇÃO PARALELA — a sentença INTERNAMENTE lista várias
+  // coisas com estrutura repetida ("falta X falta Y", "temos A, temos B",
+  // "primeiro..., segundo..."). Isso é enumeração, não redundância —
+  // cada item é uma informação diferente.
+  {
+    const t = normalize(target.text);
+    const words = t.split(" ").filter(Boolean);
+    // Detecta "palavra X palavra Y" onde a mesma palavra abre 2+ itens.
+    // Ex: "falta técnica falta método" → "falta" repete no meio.
+    for (let i = 0; i < words.length - 2; i++) {
+      const anchor = words[i];
+      if (anchor.length < 2) continue;
+      for (let j = i + 2; j < words.length; j++) {
+        if (words[j] === anchor) {
+          // Encontrou duas ocorrências da mesma palavra abrindo itens.
+          return { ok: false, reason: "internal_enumeration", matched: anchor };
+        }
+      }
+    }
+    // Detecta lista com vírgulas ou "e" entre itens curtos.
+    const raw = (target.text || "").toLowerCase();
+    const commaCount = (raw.match(/,/g) || []).length;
+    if (commaCount >= 2 && words.length <= 10) {
+      return { ok: false, reason: "internal_enumeration", matched: "vírgulas" };
+    }
+  }
+
   // Rule 4.5: ANÁFORA — se a sentença é parte de uma sequência de 2+
   // sentenças consecutivas que começam com a MESMA palavra (ou palavra
   // muito parecida), é recurso retórico. Não removível.

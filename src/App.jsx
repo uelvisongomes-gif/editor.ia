@@ -1448,7 +1448,15 @@ async function callMistakeDetectionAPI(words) {
       confidence: cand.confidence,
       text: cand.text,
     });
-    showToast(shouldRemove ? "Trecho removido" : "Trecho mantido");
+    // Quando o usuário aceita um corte, ativa o modo "ver versão editada"
+    // automaticamente pra ele ver o vídeo compilado fluido, sem os trechos
+    // removidos — feedback imediato da decisão.
+    if (shouldRemove && !previewMode) {
+      setPreviewMode(true);
+      showToast("Trecho removido — prévia editada ligada");
+    } else {
+      showToast(shouldRemove ? "Trecho removido" : "Trecho mantido");
+    }
   };
 
   const runAutoEdit = async () => {

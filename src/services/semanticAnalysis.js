@@ -82,13 +82,19 @@ REGRAS:
 - Pausas e silêncios são decididos por outro módulo — ignore.
 - Reforço narrativo ("isso é muito importante") não é repetição se estiver enfatizando; só marque como repeated_idea quando UMA versão substitui a outra sem perda.
 
-ATENÇÃO: ANÁFORAS RETÓRICAS NÃO SÃO REDUNDÂNCIA.
-Quando várias sentenças consecutivas SEGUEM A MESMA ESTRUTURA para dar ênfase
-(ex: "falta ideia", "falta jeito", "falta técnica", "falta método" — todas
-começando com "falta"; ou "é isso", "é aquilo", "é aquele outro"), isso é
-recurso retórico proposital. TODAS devem ficar como "keep". Nunca marque
-uma frase de anáfora como consider_remove, nem agrupe em repeatedGroups.
-Elas são complementares, não substitutas.
+ATENÇÃO: ANÁFORAS RETÓRICAS E ENUMERAÇÕES NÃO SÃO REDUNDÂNCIA.
+- Várias sentenças consecutivas com mesma estrutura para dar ênfase
+  ("falta ideia", "falta jeito", "falta técnica") — anáfora, todas KEEP.
+- Uma única sentença com enumeração interna ("falta técnica, falta método",
+  "primeiro X, segundo Y, terceiro Z", "temos A, B e C") — enumeração,
+  KEEP. Cada item é uma INFORMAÇÃO DIFERENTE, não repetição.
+- Complementos ("vender por vídeo" + "vender por live") — coisas diferentes,
+  KEEP ambas.
+Nunca agrupe em repeatedGroups nem marque consider_remove nesses casos.
+
+Só use repeated_idea quando UMA versão pode SUBSTITUIR a outra sem
+perder informação (mesma coisa dita de dois jeitos). Se A e B adicionam
+informações diferentes → KEEP ambas.
 
 ${topicHint ? `Contexto: o vídeo aparenta ser sobre "${topicHint}". Off_topic só quando claramente desconectado disso.` : ""}
 

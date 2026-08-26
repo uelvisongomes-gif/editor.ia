@@ -211,6 +211,7 @@ export const CONTEXT_GUARD_LABELS = {
   role_protected: "Trecho protegido (hook/CTA)",
   repetition_versions_look_complementary: "Repetição aparente pode ser complemento, não redundância",
   part_of_rhetorical_anaphora: "Parte de estrutura repetida propositalmente (anáfora)",
+  internal_enumeration: "Enumeração de itens diferentes — cada um é informação nova",
 };
 
 export function labelContextGuard(code) {

@@ -164,6 +164,46 @@ export function detectSpeechErrorsHeuristic(words) {
     }
   }
 
+  // 3.4) Hesitação PROLONGADA no início da fala: quando o Whisper devolve
+  //      uma vogal/muleta curta ("é", "ah", "eh", "um") com DURAÇÃO
+  //      anormalmente longa (> 0.45s pra uma palavra de 1-3 letras), é o
+  //      típico "Éeeee..." antes da pessoa começar a falar de verdade.
+  //      Detecta nos primeiros 5s do vídeo. Também detecta letras
+  //      repetidas na transcrição raw ("éee", "ahhh").
+  {
+    const ELONG_FILLERS = new Set(["é", "eh", "ah", "eee", "ééé", "hum", "hmm", "uhm", "uh", "aaa", "ééé"]);
+    const hasElongatedLetters = (raw) => {
+      const s = (raw || "").toLowerCase();
+      return /([aeiouâéíóúãhm])\1{2,}/i.test(s);
+    };
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      if (w.start > 5) break; // só no início do vídeo
+      const raw = (w.word || "").toLowerCase().replace(/[.,!?;:"'()]/g, "").trim();
+      const dur = w.end - w.start;
+      const isFiller = ELONG_FILLERS.has(raw) || FILLER_WORDS.has(raw) || raw.length <= 3;
+      const isLong = dur >= 0.45;
+      const hasElongated = hasElongatedLetters(w.word);
+      if ((isFiller && isLong) || hasElongated) {
+        const next = words[i + 1];
+        const gapAfter = next ? next.start - w.end : Infinity;
+        // Só marca se tiver silêncio depois (pausa antes de começar) OU
+        // for elongado explícito. Palavra fluida numa frase não conta.
+        if (hasElongated || gapAfter >= 0.3) {
+          results.push({
+            start: w.start,
+            end: w.end,
+            confidence: hasElongated ? 0.92 : 0.85,
+            reason: "filler",
+            source: "speechError",
+            detectedBy: "heuristic",
+            text: w.word,
+          });
+        }
+      }
+    }
+  }
+
   // 3.5) Hesitação isolada: palavra "reset" ("Bom", "Então", "Olha") que
   //      aparece SOZINHA cercada por silêncios longos (>= 0.8s antes e/ou
   //      >= 0.8s depois). Padrão típico de trava inicial ou pausa
