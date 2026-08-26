@@ -39,7 +39,7 @@ function preSegmentSentences(words) {
   return sentences;
 }
 
-const PROMPT = (sentencesJson, topicHint) => `Você é um editor de vídeo especialista em conteúdo falado em português brasileiro.
+const PROMPT = (sentencesJson, topicHint) => `Você é um editor de vídeo especialista em conteúdo falado em português brasileiro. Você é EXTREMAMENTE CONSERVADOR: a regra número um é "na dúvida, MANTER".
 
 Recebe abaixo uma lista de sentenças numeradas extraídas da fala de UM vídeo. Sua tarefa é:
 
@@ -54,20 +54,25 @@ Recebe abaixo uma lista de sentenças numeradas extraídas da fala de UM vídeo.
        "conclusion"  (encerramento do raciocínio)
        "cta"         (chamada para ação, "curte", "segue", "compra", "link")
        "aside"       (comentário paralelo, digressão curta)
-       "off_topic"   (fora do assunto principal do vídeo)
+       "off_topic"   (FORA do assunto principal — use com muita cautela)
    - "importance": "high" | "medium" | "low".
-   - "dependsOnPrev": true se a sentença só faz sentido junto da imediatamente anterior (pronome sem antecedente, "isso", "essa parte", conclusão que depende do exemplo anterior). Caso contrário false.
-   - "keepAdvice": "keep" | "trim" | "consider_remove" | "review". Nunca marque "consider_remove" se dependsOnPrev=true numa sentença que seria mantida.
-3. Agrupar em "repeatedGroups" conjuntos de sentenças que exprimem A MESMA IDEIA de formas diferentes (o apresentador repete, reformula, tenta de novo). Para cada grupo, escolha "bestIndex" — a versão mais clara e objetiva (mantenha essa; as outras são candidatas a remoção).
-4. Listar em "offTopicIndexes" sentenças claramente fora do assunto principal (conversas paralelas, interrupções, pensamentos abandonados, digressões longas).
+   - "dependsOnPrev": true se a sentença só faz sentido junto da imediatamente anterior. Se houver qualquer chance, prefira true.
+   - "keepAdvice": "keep" | "trim" | "consider_remove" | "review".
 
-REGRAS DE OURO:
-- Não marque para remover uma sentença curta se ela dá contexto essencial para o que vem depois.
-- Prefira sempre a versão mais clara e objetiva em repetições.
-- Uma pausa dramática ou uma respiração não é conteúdo removível — você não decide sobre silêncios aqui.
-- Se estiver em dúvida sobre remover, use "review" em keepAdvice.
+3. "repeatedGroups": conjuntos de sentenças que exprimem A MESMA IDEIA de formas diferentes E QUE PODEM SUBSTITUIR UMA À OUTRA sem perda. Para cada grupo, escolha "bestIndex" — a mais clara. As demais são candidatas a remoção.
 
-${topicHint ? `Contexto: o vídeo aparenta ser sobre "${topicHint}". Use isso como âncora ao decidir off-topic.` : ""}
+4. "offTopicIndexes": sentenças CLARAMENTE fora do assunto principal (conversas paralelas, interrupções, pensamentos abandonados). NÃO liste sentenças que são exemplos, histórias, comparações, contextualizações ou reforços — mesmo que pareçam laterais, elas geralmente sustentam o argumento.
+
+REGRAS DE OURO (ordem de prioridade):
+1. NA DÚVIDA, USE "keep" ou "review". Nunca "consider_remove".
+2. Uma frase que reforça, exemplifica, contextualiza ou complementa NÃO É REPETIÇÃO — é oratória. Não a marque como repeated_idea.
+3. Um trecho aparentemente lateral pode ser história/exemplo/prova — não é off_topic. Só liste em offTopicIndexes se for evidentemente uma conversa paralela ou interrupção que não pertence ao vídeo.
+4. Não sugira remover uma sentença que introduz o tópico da próxima.
+5. Não sugira remover uma sentença que termina em conector aberto (porque, pois, mas, como, então).
+6. Pausas dramáticas ou respirações NÃO são conteúdo — silêncios são decididos por outro módulo.
+7. Se dois trechos falam de coisas complementares (ex: "vender por vídeo" + "vender por live"), NÃO os agrupe em repeatedGroups — são complementos, não redundância.
+
+${topicHint ? `Contexto: o vídeo aparenta ser sobre "${topicHint}". Só marque off_topic quando a sentença for CLARAMENTE desconectada disso — não quando ela apenas explora um ângulo diferente do mesmo tema.` : ""}
 
 Responda APENAS com um JSON válido, sem markdown, no formato exato:
 {

@@ -26,6 +26,11 @@ export const EDITING_PROFILES = {
     executeThreshold: 0.85,                // technical cuts
     executeThresholdSemantic: 0.92,        // semantic cuts (stricter)
     reviewThreshold: 0.65,
+    // Duration caps: acima destas durações a IA nunca corta automaticamente,
+    // mesmo com alta confiança — vira REVIEW. Cortes longos são
+    // desproporcionalmente arriscados (removem contexto real).
+    maxTechnicalCutDur: 4.0,
+    maxSemanticCutDur: 6.0,
     preserveRoles: ["hook", "conclusion", "cta"],
   },
   equilibrada: {
@@ -41,6 +46,8 @@ export const EDITING_PROFILES = {
     executeThreshold: 0.80,                // technical cuts
     executeThresholdSemantic: 0.88,        // semantic cuts (raised from 0.80)
     reviewThreshold: 0.60,
+    maxTechnicalCutDur: 5.0,
+    maxSemanticCutDur: 8.0,
     preserveRoles: ["hook", "cta"],
   },
   agressiva: {
@@ -56,6 +63,8 @@ export const EDITING_PROFILES = {
     executeThreshold: 0.72,                // technical cuts
     executeThresholdSemantic: 0.82,        // semantic cuts (raised from 0.72)
     reviewThreshold: 0.55,
+    maxTechnicalCutDur: 8.0,
+    maxSemanticCutDur: 12.0,
     preserveRoles: ["hook", "cta"],
   },
 };

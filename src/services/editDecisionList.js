@@ -214,21 +214,31 @@ export function buildEDL({ duration, words, semantic, silences, speechErrors, pr
       : "review";
     let contextSafe = true;
     let contextGuardReason = null;
+    let safety = null;
+
+    // Duration cap — cortes muito longos são desproporcionalmente arriscados
+    // (mesmo com alta confiança) porque removem contexto real que a IA
+    // pode não ter percebido. Acima do cap por tipo, força review.
+    const isTechnical = TECHNICAL_SOURCES.has(r.source);
+    const durCap = isTechnical
+      ? (profile.maxTechnicalCutDur ?? Infinity)
+      : (profile.maxSemanticCutDur ?? Infinity);
+    if ((r.end - r.start) > durCap) {
+      if (action === "remove" || action === "trim") action = "review";
+      safety = "cut_too_long";
+    }
 
     // Semantic cuts must pass the context guard. Technical cuts skip it.
-    if (!TECHNICAL_SOURCES.has(r.source)) {
+    if (!isTechnical) {
       const guard = evaluateContext({ candidate: r, sentences: semanticSentences });
       contextSafe = guard.ok;
       contextGuardReason = guard.ok ? null : guard.reason;
       if (!guard.ok) {
-        // Guard fails → the cut is downgraded to review so the user sees
-        // it explicitly. If the fail is "role_protected" or the guard is
-        // still uncertain, we do not silently drop the item.
         action = "review";
       }
     }
 
-    decided.push({ ...r, action, contextSafe, contextGuardReason });
+    decided.push({ ...r, action, contextSafe, contextGuardReason, ...(safety ? { safety } : {}) });
   }
 
   const mergedIntents = mergeOverlapping(decided);
@@ -274,6 +284,7 @@ export function buildEDL({ duration, words, semantic, silences, speechErrors, pr
       source: r.source,
       contextSafe: r.contextSafe !== false, // undefined for technical cuts = safe
       ...(r.contextGuardReason ? { contextGuardReason: r.contextGuardReason } : {}),
+      ...(r.safety ? { safety: r.safety } : {}),
       ...(r.replacementNote ? { replacementNote: r.replacementNote } : {}),
     });
     cursor = r.end;
@@ -377,6 +388,7 @@ export const SAFETY_LABELS = {
   abrupt_open: "Poderia deixar o começo abrupto",
   abrupt_close: "Poderia deixar o final abrupto",
   long_removal_streak: "Muitos cortes seguidos",
+  cut_too_long: "Corte longo demais — revise antes de aplicar",
 };
 
 // Context Guard reasons — mapeadas para explicar por que um corte semântico
