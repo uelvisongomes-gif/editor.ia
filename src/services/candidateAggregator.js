@@ -128,24 +128,15 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
   }
 
   // 5) Advice do LLM por sentença.
+  // REGRA (Fase 3): keepAdvice="consider_remove" SOZINHO NÃO gera candidato.
+  // Baixa relevância isolada não é motivo pra cortar — a frase pode ser
+  // conexão/preparação/estilo. Só será considerada se OUTRO detector
+  // (silence, speechError, repetição, off_topic) concordar no mesmo
+  // intervalo — o merge por overlap cuida disso ao juntar as evidências.
+  // Deixamos aqui apenas o caso trim explícito, que exige perfil agressivo.
   if (semantic?.sentences?.length) {
     for (const s of semantic.sentences) {
-      if (s.keepAdvice === "consider_remove") {
-        candidates.push({
-          start: s.start,
-          end: s.end,
-          text: s.text,
-          primaryType: "low_value",
-          confidence: 0.6,
-          detectors: [{
-            detector: "semantic",
-            reason: "low_value",
-            confidence: 0.6,
-            evidence: `LLM sugeriu consider_remove; importance=${s.importance || "?"}`,
-          }],
-          canOverrideProtection: false,
-        });
-      } else if (s.keepAdvice === "trim" && profile.trimLowImportance) {
+      if (s.keepAdvice === "trim" && profile.trimLowImportance) {
         candidates.push({
           start: s.start,
           end: s.end,

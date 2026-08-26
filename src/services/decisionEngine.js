@@ -18,6 +18,7 @@
 
 import { evaluateContext } from "./contextGuard.js";
 import { TECHNICAL_SOURCES } from "./editingProfiles.js";
+import { refineBoundary } from "./boundaryRefinement.js";
 
 const EPSILON = 0.02;
 const MIN_TRIM_DUR = 0.12;
@@ -51,17 +52,22 @@ function pickExecuteThreshold(candidate, profile) {
  *   safety: string|null,
  * }>}
  */
-export function decideAll(candidates, { profile, semanticSentences = [], protectedRanges = [] }) {
-  return candidates.map((cand) => decideOne(cand, { profile, semanticSentences, protectedRanges }));
+export function decideAll(candidates, { profile, semanticSentences = [], protectedRanges = [], words = [] }) {
+  return candidates.map((cand) => decideOne(cand, { profile, semanticSentences, protectedRanges, words }));
 }
 
-function decideOne(cand, { profile, semanticSentences, protectedRanges }) {
+function decideOne(cand, { profile, semanticSentences, protectedRanges, words = [] }) {
   const c = cand.confidence ?? 0.6;
   const blocked = [];
   let finalAction = "detected_only";
   let contextSafe = true;
   let contextGuardReason = null;
   let safety = null;
+  // Bordas efetivas do corte — começam iguais à do candidato e podem
+  // ser encolhidas pelo boundary refinement mais adiante.
+  let cutStart = cand.start;
+  let cutEnd = cand.end;
+  let boundaryNote = null;
 
   const executeThreshold = pickExecuteThreshold(cand, profile);
   const reviewThreshold = profile.reviewThreshold ?? 0.6;
@@ -128,6 +134,25 @@ function decideOne(cand, { profile, semanticSentences, protectedRanges }) {
     if (!guard.ok) blocked.push(`context_guard: ${guard.reason}`);
   }
 
+  // BOUNDARY REFINEMENT — cortes semânticos com > 2s tentam encolher pro
+  // subtrecho realmente problemático. Se o refinement NÃO acha nada
+  // (no_pattern_found), o candidato é degradado pra review em vez de
+  // cortar o bloco inteiro — princípio MINIMUM NECESSARY CUT.
+  if (!isTechnical(cand)) {
+    const refined = refineBoundary({ candidate: cand, words });
+    if (refined.ok) {
+      cutStart = refined.cutStart;
+      cutEnd = refined.cutEnd;
+      boundaryNote = refined.note || refined.reason || null;
+    } else {
+      // Sem padrão claro dentro do candidato → não corta tudo.
+      // Vira review, o usuário decide manualmente.
+      blocked.push(`boundary_uncertain: ${refined.note || "no_pattern"}`);
+      // Sinaliza pra depois forçar review.
+      cand._forceReviewOnly = true;
+    }
+  }
+
   // Decide banda de confiança.
   let proposedAction;
   if (c >= executeThreshold) proposedAction = cand.trimOnly ? "trim" : "remove";
@@ -159,12 +184,22 @@ function decideOne(cand, { profile, semanticSentences, protectedRanges }) {
     finalAction = "review";
   }
 
+  // Boundary refinement falhou → nunca corta o bloco inteiro automático.
+  if (cand._forceReviewOnly && (finalAction === "remove" || finalAction === "trim")) {
+    finalAction = "review";
+  }
+
   return {
     ...cand,
+    // Bordas do CANDIDATO permanecem (região analisada); as bordas de CUT
+    // efetivas — o intervalo que a EDL deve remover — vão separadas.
+    cutStart,
+    cutEnd,
     proposedAction,
     finalAction,
     contextSafe,
     contextGuardReason,
+    boundaryNote,
     blockedReasons: blocked,
     safety,
   };

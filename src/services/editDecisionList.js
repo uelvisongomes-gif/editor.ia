@@ -42,10 +42,12 @@ export function buildEDL({ duration, words, semantic, silences, speechErrors, pr
   }
 
   // 3) Decide o destino de cada candidato — este é o problemCandidates.
+  //    words é passado pro boundaryRefinement dentro do decisionEngine.
   const problemCandidates = decideAll(rawCandidates, {
     profile,
     semanticSentences,
     protectedRanges,
+    words,
   });
 
   // 4) Monta a EDL de fato — só os que viraram remove/trim/review entram.
@@ -67,10 +69,15 @@ export function buildEDL({ duration, words, semantic, silences, speechErrors, pr
 
   const items = [];
   let cursor = 0;
-  for (const cand of cutsForEdl) {
-    // Cortes se sobrepondo — pula os que ficaram para trás do cursor.
-    if (cand.end <= cursor + EPSILON) continue;
-    const start = Math.max(cursor, cand.start);
+  // Usa CUTBORDS (cutStart/cutEnd), não as bordas do candidato — quando
+  // o boundary refinement encolheu o corte, aqui é onde a decisão vira
+  // realidade na timeline.
+  const sortedCuts = [...cutsForEdl].sort((a, b) => (a.cutStart ?? a.start) - (b.cutStart ?? b.start));
+  for (const cand of sortedCuts) {
+    const cs = cand.cutStart ?? cand.start;
+    const ce = cand.cutEnd ?? cand.end;
+    if (ce <= cursor + EPSILON) continue;
+    const start = Math.max(cursor, cs);
     if (start > cursor + EPSILON) {
       items.push({
         id: nextId(),
@@ -87,20 +94,24 @@ export function buildEDL({ duration, words, semantic, silences, speechErrors, pr
     items.push({
       id: nextId(),
       start,
-      end: cand.end,
+      end: ce,
       action: cand.finalAction,
       reason: cand.primaryType,
       confidence: cand.confidence ?? 0.7,
-      narrativeRole: roleAt((start + cand.end) / 2),
-      text: cand.text || textInRange(start, cand.end),
+      narrativeRole: roleAt((start + ce) / 2),
+      text: cand.text || textInRange(start, ce),
       source: cand.detectors?.[0]?.detector || "unknown",
       contextSafe: cand.contextSafe !== false,
       candidateId: cand.id,
+      // Preservar a região analisada original — a UI mostra em "REGIÃO ANALISADA"
+      analyzedStart: cand.start,
+      analyzedEnd: cand.end,
+      ...(cand.boundaryNote ? { boundaryNote: cand.boundaryNote } : {}),
       ...(cand.contextGuardReason ? { contextGuardReason: cand.contextGuardReason } : {}),
       ...(cand.safety ? { safety: cand.safety } : {}),
       ...(cand.replacementNote ? { replacementNote: cand.replacementNote } : {}),
     });
-    cursor = cand.end;
+    cursor = ce;
   }
   if (cursor < duration - EPSILON) {
     items.push({

@@ -129,8 +129,24 @@ export function ProblemsFound({ candidates, onPlay, onRemove, onKeep }) {
                     ))}
                   </div>
                   <div style={{ color: "#9A9AA5" }} className="text-[11px] tabular-nums mt-0.5">
-                    {formatTime(cand.start)} → {formatTime(cand.end)}
-                    <span style={{ color: "#6B6B75" }}> · {(cand.end - cand.start).toFixed(1)}s · conf {Math.round((cand.confidence || 0) * 100)}%</span>
+                    {(cand.cutStart != null && cand.cutEnd != null &&
+                      (Math.abs(cand.cutStart - cand.start) > 0.05 || Math.abs(cand.cutEnd - cand.end) > 0.05)) ? (
+                      <>
+                        <div><span style={{ color: "#6B6B75" }}>Analisado:</span> {formatTime(cand.start)} → {formatTime(cand.end)}</div>
+                        <div style={{ color: "#FFB0A0" }}>
+                          <span style={{ color: "#F09595" }}>Corte:</span> {formatTime(cand.cutStart)} → {formatTime(cand.cutEnd)}
+                          <span style={{ color: "#6B6B75" }}> · {(cand.cutEnd - cand.cutStart).toFixed(1)}s</span>
+                        </div>
+                        {cand.boundaryNote && (
+                          <div style={{ color: "#6B6B75" }} className="text-[10px]">Refinado por: {cand.boundaryNote}</div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {formatTime(cand.start)} → {formatTime(cand.end)}
+                        <span style={{ color: "#6B6B75" }}> · {(cand.end - cand.start).toFixed(1)}s · conf {Math.round((cand.confidence || 0) * 100)}%</span>
+                      </>
+                    )}
                   </div>
                   {cand.text && (
                     <p style={{ color: "#C9C9D1", background: "#1B1B21", borderLeft: "2px solid #FF6A2B" }}
@@ -159,11 +175,27 @@ export function ProblemsFound({ candidates, onPlay, onRemove, onKeep }) {
                 </div>
               </div>
               <div className="flex items-center gap-1.5 mt-2 justify-end flex-wrap">
-                <button onClick={() => onPlay?.(cand.start, cand.end)}
-                  style={{ background: "#1B1B21", color: "#C9C9D1" }}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold">
-                  <Play size={11} /> Ouvir
-                </button>
+                {(cand.cutStart != null && cand.cutEnd != null &&
+                  (Math.abs(cand.cutStart - cand.start) > 0.05 || Math.abs(cand.cutEnd - cand.end) > 0.05)) ? (
+                  <>
+                    <button onClick={() => onPlay?.(cand.start, cand.end)}
+                      style={{ background: "#1B1B21", color: "#C9C9D1" }}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold">
+                      <Play size={11} /> Região
+                    </button>
+                    <button onClick={() => onPlay?.(cand.cutStart, cand.cutEnd)}
+                      style={{ background: "#1B1B21", color: "#F09595" }}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold">
+                      <Play size={11} /> Corte
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => onPlay?.(cand.start, cand.end)}
+                    style={{ background: "#1B1B21", color: "#C9C9D1" }}
+                    className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold">
+                    <Play size={11} /> Ouvir
+                  </button>
+                )}
                 <button onClick={() => onRemove?.(cand)}
                   style={{ background: "#5A2A1E", color: "#FFB0A0" }}
                   className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold">

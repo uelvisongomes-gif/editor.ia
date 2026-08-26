@@ -214,34 +214,44 @@ export function detectSpeechErrorsHeuristic(words) {
         cur = [];
       }
     }
+    // Pular palavras de abertura tipo "bom", "então", "olha" quando forem
+    // apenas hesitação/reset — a comparação de reinício deve ser sobre a
+    // parte REAL da fala, não sobre o filler inicial.
+    const isSkippableHead = (w) => STANDALONE_HESITATIONS.has(w);
+    const headOf = (startIdx, endIdx) => {
+      let idx = startIdx;
+      while (idx <= endIdx && isSkippableHead(norm[idx])) idx += 1;
+      return idx;
+    };
     for (let s = 0; s < sentences.length - 1; s++) {
       const a = sentences[s];
       const b = sentences[s + 1];
       const aLen = a.endIdx - a.startIdx + 1;
       const bLen = b.endIdx - b.startIdx + 1;
-      // Só considera se ambas curtas (<=15 palavras) e o gap entre elas < 2s.
       if (aLen > 15 || bLen > 15) continue;
       const gap = words[b.startIdx].start - words[a.endIdx].end;
-      if (gap > 2.0) continue;
-      // Compara as N primeiras palavras (N = min(3, aLen, bLen)).
-      const n = Math.min(3, aLen, bLen);
-      if (n < 2) continue;
-      let same = true;
-      for (let k = 0; k < n; k++) {
-        if (norm[a.startIdx + k] !== norm[b.startIdx + k]) { same = false; break; }
-      }
-      if (!same) continue;
-      // Marca a primeira sentença inteira como reinício.
+      if (gap > 3.0) continue;
+      const aHead = headOf(a.startIdx, a.endIdx);
+      const bHead = headOf(b.startIdx, b.endIdx);
+      if (aHead > a.endIdx - 1 || bHead > b.endIdx - 1) continue;
+      // Compara as 2 primeiras palavras depois de pular hesitations iniciais.
+      const sameHead2 = norm[aHead] === norm[bHead] &&
+                        norm[aHead + 1] === norm[bHead + 1];
+      if (!sameHead2) continue;
+      const sameHead3 = (aHead + 2 <= a.endIdx) && (bHead + 2 <= b.endIdx) &&
+                        norm[aHead + 2] === norm[bHead + 2];
+      const isFirst = s === 0;
+      const conf = sameHead3 ? 0.88 : isFirst ? 0.82 : 0.75;
       results.push({
         start: words[a.startIdx].start,
         end: words[a.endIdx].end,
-        confidence: 0.85,
+        confidence: conf,
         reason: "false_start",
         source: "speechError",
-      detectedBy: "heuristic",
+        detectedBy: "heuristic",
         text: words.slice(a.startIdx, a.endIdx + 1).map((w) => w.word).join(" "),
       });
-      s += 1; // pula a segunda pra não re-analisar
+      s += 1;
     }
   }
 
