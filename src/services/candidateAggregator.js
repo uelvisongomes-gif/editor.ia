@@ -29,12 +29,61 @@ const SURGICAL_ERROR_REASONS = new Set([
   "stutter", "false_start", "abandoned_phrase", "self_correction", "filler",
 ]);
 
+// Enumeração cross-sentença ("falta ideia, falta jeito, falta técnica,
+// falta método"): 3+ sentenças consecutivas começando com a MESMA palavra.
+// Dentro desse span, cortes por "repeated_idea", "low_value" e
+// "sound_without_word" são silenciados — todos os itens são intencionais.
+export function detectEnumerationSpans(sentences) {
+  if (!sentences?.length) return [];
+  const firstWord = (s) => {
+    const raw = (s.text || "").toLowerCase().replace(/^[.,;:!?()\s]+/, "");
+    const first = raw.split(/\s+/)[0] || "";
+    return first.replace(/[.,;:!?()"']/g, "");
+  };
+  const sorted = [...sentences].sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+  const spans = [];
+  let i = 0;
+  while (i < sorted.length) {
+    const anchor = firstWord(sorted[i]);
+    if (!anchor || anchor.length < 2) { i += 1; continue; }
+    let j = i + 1;
+    while (j < sorted.length && firstWord(sorted[j]) === anchor) j += 1;
+    if (j - i >= 3) {
+      spans.push({
+        start: sorted[i].start,
+        end: sorted[j - 1].end,
+        anchor,
+        count: j - i,
+      });
+      i = j;
+    } else {
+      i += 1;
+    }
+  }
+  return spans;
+}
+
+const ENUMERATION_BLOCKED_TYPES = new Set([
+  "repeated_idea", "low_value", "trim_low_importance", "off_topic",
+]);
+
+function candidateInSpan(cand, span) {
+  const mid = (cand.start + cand.end) / 2;
+  return mid >= span.start && mid <= span.end;
+}
+
+function isSoundWithoutWordCand(cand) {
+  return (cand.text || "").includes("som sem palavra");
+}
+
 /**
  * Colhe todos os candidatos das fontes disponíveis. Não decide nada — só
  * junta e dedupa.
  */
 export function collectCandidates({ words, semantic, silences, speechErrors, profile }) {
   const candidates = [];
+  const enumerationSpans = detectEnumerationSpans(semantic?.sentences || []);
+  const inEnumeration = (cand) => enumerationSpans.some((sp) => candidateInSpan(cand, sp));
 
   // 1) Silêncios (sempre considerados).
   for (const s of silences || []) {
@@ -57,7 +106,7 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
   // 2) Speech errors (heurístico + LLM, ambos entram pelo mesmo bag).
   if (profile.removeSpeechErrors) {
     for (const e of speechErrors || []) {
-      candidates.push({
+      const cand = {
         start: e.start,
         end: e.end,
         text: e.text || "",
@@ -72,7 +121,11 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
         }],
         replacementNote: e.replacementNote,
         canOverrideProtection: SURGICAL_ERROR_REASONS.has(e.reason || "filler"),
-      });
+      };
+      // "(som sem palavra)" dentro de enumeração retórica = pausa
+      // intencional entre itens da lista. Não é hesitação.
+      if (isSoundWithoutWordCand(cand) && inEnumeration(cand)) continue;
+      candidates.push(cand);
     }
   }
 
@@ -85,7 +138,7 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
         if (idx === best) continue;
         const s = byIndex.get(idx);
         if (!s) continue;
-        candidates.push({
+        const cand = {
           start: s.start,
           end: s.end,
           text: s.text,
@@ -99,7 +152,11 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
           }],
           canOverrideProtection: false,
           repeatedGroupBestIndex: best,
-        });
+        };
+        // Item de enumeração retórica ("falta X, falta Y, falta Z...")
+        // NUNCA é redundância — cada item é uma informação distinta.
+        if (inEnumeration(cand)) continue;
+        candidates.push(cand);
       }
     }
   }
@@ -110,7 +167,7 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
     for (const idx of semantic.offTopicIndexes) {
       const s = byIndex.get(idx);
       if (!s) continue;
-      candidates.push({
+      const cand = {
         start: s.start,
         end: s.end,
         text: s.text,
@@ -123,7 +180,9 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
           evidence: `Sentença classificada como fora do assunto principal "${semantic.topic || ""}"`,
         }],
         canOverrideProtection: false,
-      });
+      };
+      if (inEnumeration(cand)) continue;
+      candidates.push(cand);
     }
   }
 
@@ -137,7 +196,7 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
   if (semantic?.sentences?.length) {
     for (const s of semantic.sentences) {
       if (s.keepAdvice === "trim" && profile.trimLowImportance) {
-        candidates.push({
+        const cand = {
           start: s.start,
           end: s.end,
           text: s.text,
@@ -151,7 +210,9 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
           }],
           trimOnly: true,
           canOverrideProtection: false,
-        });
+        };
+        if (inEnumeration(cand)) continue;
+        candidates.push(cand);
       }
     }
   }

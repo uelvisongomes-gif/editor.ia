@@ -331,6 +331,45 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
     });
   }
 
+  // 3.6) PALAVRA FUNCIONAL ESTICADA (artefato do Whisper).
+  //      Quando o Whisper atribui duração enorme a uma palavrinha ("das",
+  //      "que", "e", "de"...) que na fala real dura ~200ms, ele está
+  //      escondendo repetição/hesitação ali dentro. Ex.: user falou
+  //      "na maioria, na maioria das vezes" e a segunda "na maioria" ficou
+  //      colada no timing da palavra "das" (que virou 1.7s de duração).
+  //      Marca o miolo dessa palavra pra corte. Deixa 250ms de margem em
+  //      cada ponta pra preservar o áudio real da própria palavra.
+  {
+    const FUNCTION_WORDS = new Set([
+      "o", "a", "os", "as", "um", "uma", "uns", "umas",
+      "de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas",
+      "ao", "à", "aos", "às", "com", "por", "pra", "pro", "pras", "pros",
+      "e", "ou", "mas", "que", "se", "é",
+      "me", "te", "lhe", "lhes",
+    ]);
+    const SUSPICIOUS_DUR = 0.8;
+    const EDGE_MARGIN = 0.25;
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      const raw = norm[i];
+      if (!FUNCTION_WORDS.has(raw)) continue;
+      const dur = w.end - w.start;
+      if (dur < SUSPICIOUS_DUR) continue;
+      const cutStart = w.start + EDGE_MARGIN;
+      const cutEnd = w.end - EDGE_MARGIN;
+      if (cutEnd - cutStart < 0.3) continue;
+      results.push({
+        start: cutStart,
+        end: cutEnd,
+        confidence: 0.82,
+        reason: "stutter",
+        source: "speechError",
+        detectedBy: "heuristic",
+        text: `(palavra "${w.word}" esticada por ${dur.toFixed(1)}s — provável repetição escondida)`,
+      });
+    }
+  }
+
   // 4) Reinício de frase sem marcador: duas sentenças consecutivas que
   //    começam com as mesmas 2-3 palavras (ex: "Hoje eu vou mostrar. Hoje
   //    eu vou ensinar."). Marca a primeira como abandoned_phrase.
