@@ -366,6 +366,12 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
       "então", "aí", "bom", "olha", "assim", "bem", "veja",
       "gente", "pessoal", "enfim", "ok", "beleza",
     ]);
+    // Terminador REAL de sentença (não conta "..." reticências).
+    const endsSentenceHard = (raw) => {
+      const s = (raw || "").trim();
+      if (/\.{2,}$/.test(s)) return false;
+      return /[.!?]$/.test(s);
+    };
     for (let i = 1; i < words.length - 1; i++) {
       if (!HANGING_CONNECTORS.has(norm[i])) continue;
       // Procura RESET dentro dos próximos 6s (pra pegar palavras esticadas)
@@ -375,31 +381,36 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
       while (j < words.length && (words[j].start - words[i].end) < 6.0) {
         const gapFromPrev = j > i + 1 ? (words[j].start - words[j - 1].end) : (words[j].start - words[i].end);
         const durOfPrev = j > 0 ? (words[j - 1].end - words[j - 1].start) : 0;
-        // "gap suspeito" = gap real OR palavra anterior esticada (Whisper
-        // escondendo hesitação dentro da palavra)
-        if (gapFromPrev >= 0.6 || durOfPrev >= 1.2) sawSignificantGap = true;
+        // "gap suspeito" = gap real OR palavra anterior esticada OR
+        // palavra terminando em "..." (marcador explícito de hesitação)
+        const prevHasEllipsis = j > 0 && /\.{2,}$/.test(words[j - 1].word || "");
+        if (gapFromPrev >= 0.6 || durOfPrev >= 1.2 || prevHasEllipsis) sawSignificantGap = true;
         if (RESET_WORDS.has(norm[j]) && sawSignificantGap) {
           foundReset = j;
           break;
         }
-        // Não atravessa pontuação forte
-        if (/[.!?]$/.test(words[j].word || "")) break;
+        if (endsSentenceHard(words[j].word)) break; // só pontuação real quebra
         j++;
       }
       if (foundReset > i + 1) {
-        const start = words[i].start;                // do conector
-        const end = words[foundReset - 1].end;       // até palavra antes do reset
-        // Tem que ser algo de tamanho razoável e curto (defeito, não conteúdo)
+        // Estende PRA TRÁS se palavra anterior é filler ("é", "eh", "ah")
+        let startIdx = i;
+        while (startIdx > 0 && (FILLER_WORDS.has(norm[startIdx - 1]) || norm[startIdx - 1].length <= 1)) {
+          startIdx -= 1;
+        }
+        const start = words[startIdx].start;
+        // Estende PRA FRENTE até (mas exclusive) a palavra reset
+        const end = words[foundReset].start - 0.05;
         const span = end - start;
         if (span >= 1.0 && span <= 8.0) {
           results.push({
             start,
             end,
-            confidence: 0.85,
+            confidence: 0.88,
             reason: "abandoned_phrase",
             source: "speechError",
             detectedBy: "heuristic",
-            text: words.slice(i, foundReset).map((w) => w.word).join(" "),
+            text: words.slice(startIdx, foundReset).map((w) => w.word).join(" "),
           });
         }
       }

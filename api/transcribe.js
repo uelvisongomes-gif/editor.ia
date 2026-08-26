@@ -78,24 +78,34 @@ function alignWords(gptText, whisperWords) {
     }
     if (gLook > 0) {
       // Gpt tem `gLook` palavras extras antes de bater com whisper[wi].
-      // Divide o tempo da PALAVRA ANTERIOR do whisper (se esticada) ou o
-      // gap antes de whisper[wi] entre esses tokens extras.
+      // Escolhe entre pegar tempo da palavra ANTERIOR ou da ATUAL — a
+      // que estiver mais esticada. Caso comum: whisper.das = 1.74s pra
+      // acomodar "na maioria das" (2 extras + das). Sem isso, extras
+      // ficariam empilhadas em 0.05s.
       const extras = gptTokens.slice(gi, gi + gLook);
       const prev = whisperWords[wi - 1];
-      const curStart = whisperWords[wi].start;
+      const cur = whisperWords[wi];
+      const prevDur = prev ? (prev.end - prev.start) : 0;
+      const curDur = cur.end - cur.start;
       let availStart, availEnd;
-      if (prev && (prev.end - prev.start) > 0.4) {
+      if (curDur > 0.7 && curDur >= prevDur) {
+        // Palavra ATUAL esticada — pega a cabeça, deixa pelo menos 0.2s
+        // pro áudio real da palavra atual no fim.
+        const holdOut = Math.min(0.25, curDur * 0.25);
+        availStart = cur.start;
+        availEnd = cur.end - holdOut;
+        cur.start = availEnd; // atualiza start da atual pro depois dos extras
+      } else if (prevDur > 0.4) {
         // Palavra anterior esticada — pega a cauda dela.
-        availStart = prev.start + Math.min(0.25, (prev.end - prev.start) * 0.3);
+        availStart = prev.start + Math.min(0.25, prevDur * 0.3);
         availEnd = prev.end;
-        // Ajusta o end do último item já inserido (corresponde a `prev`).
         if (result.length > 0 && Math.abs(result[result.length - 1].end - prev.end) < 0.01) {
           result[result.length - 1].end = availStart;
         }
       } else {
-        // Sem cauda disponível — usa uma janelinha antes de curStart.
-        availStart = Math.max(prev ? prev.end : 0, curStart - 0.5);
-        availEnd = curStart;
+        // Nenhuma cauda/cabeça — janelinha entre elas.
+        availStart = Math.max(prev ? prev.end : 0, cur.start - 0.5);
+        availEnd = cur.start;
       }
       const span = Math.max(0.05, availEnd - availStart);
       const slice = span / extras.length;

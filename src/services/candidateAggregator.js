@@ -244,25 +244,42 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
     }
   }
 
-  // Enumeração retórica é INTOCÁVEL: cortes que atravessam suas bordas
-  // são truncados. Sem isso, gap-silence/pausa "entre itens" acabam
-  // apagando itens da lista.
+  // Enumeração retórica é INTOCÁVEL. Regra:
+  //   - Candidato cujo MID cai dentro da span de enumeração:
+  //       - se for pausa/silêncio/repeated_idea/off_topic/low_value → DROP
+  //       - se for surgical (stutter/false_start/abandoned_phrase) → mantém
+  //         (pode legitimamente cortar dentro de um item, ex.: gagueira do
+  //         próprio "falta falta falta")
+  //   - Candidato cruzando borda: encolhe pra ficar do lado de fora.
+  const REASONS_BLOCKED_IN_ENUM = new Set([
+    "silence", "no_speech", "long_pause",
+    "repeated_idea", "off_topic", "trim_low_importance", "low_value",
+  ]);
+  const isBlockedByReasonOrText = (c) => {
+    if (REASONS_BLOCKED_IN_ENUM.has(c.primaryType)) return true;
+    const txt = (c.text || "").toLowerCase();
+    if (txt.includes("pausa entre palavras")) return true;
+    if (txt.includes("som sem palavra")) return true;
+    if (txt.includes("pre-roll sem fala")) return true;
+    // Detectores subjacentes também contam — merge pode ter escondido.
+    if (c.detectors?.some((d) => REASONS_BLOCKED_IN_ENUM.has(d.reason))) return true;
+    return false;
+  };
   const clamped = [];
   for (const c of candidates) {
     let s = c.start, e = c.end;
+    const mid = (s + e) / 2;
     let killed = false;
     for (const sp of enumerationSpans) {
-      const startInside = s > sp.start + 0.05 && s < sp.end - 0.05;
-      const endInside   = e > sp.start + 0.05 && e < sp.end - 0.05;
-      // Candidato que atravessa borda de enumeração: encolhe pra fora.
-      if (!startInside && endInside && s < sp.start) {
+      const midInside = mid >= sp.start && mid <= sp.end;
+      if (midInside && !SURGICAL_TYPES.has(c.primaryType) && isBlockedByReasonOrText(c)) {
+        killed = true; break;
+      }
+      // Encolhe se cruza borda (mesmo pra surgical)
+      if (s < sp.start && e > sp.start && e <= sp.end) {
         e = sp.start;
-      } else if (startInside && !endInside && e > sp.end) {
+      } else if (s >= sp.start && s < sp.end && e > sp.end) {
         s = sp.end;
-      } else if (startInside && endInside) {
-        // Corte inteiramente dentro de enumeração — só sobrevive se for
-        // surgical (bigram stutter / hesitação real dentro de um item)
-        if (!SURGICAL_TYPES.has(c.primaryType)) killed = true;
       }
     }
     if (killed) continue;
