@@ -253,9 +253,12 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
         if (count >= 3) {
           const start = words[i].start;
           const end = words[lastFillerIdx].end;
+          // Cadeia de 4+ fillers é sinal quase seguro de trecho abandonado
+          // (não fluida, o apresentador tá visivelmente travado). Bump.
+          const conf = count >= 4 ? 0.86 : 0.72;
           results.push({
             start, end,
-            confidence: 0.7,
+            confidence: conf,
             reason: "filler",
             source: "speechError",
       detectedBy: "heuristic",
@@ -341,6 +344,62 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
             source: "speechError",
             detectedBy: "heuristic",
             text: w.word,
+          });
+        }
+      }
+    }
+  }
+
+  // 3.45) CONECTOR PENDURADO + RESET (abandono estrutural).
+  //       Padrão: "...é porque [pausa/hesitação longa]... então/aí/bom..."
+  //       Frase incompleta terminando em conector (porque/quando/mas/e/pra),
+  //       gap >= 0.8s (incluindo região "esticada" pelo Whisper), depois
+  //       reset word marca a retomada. O trecho entre o conector e o
+  //       reset (exclusive) é a tentativa abandonada.
+  //       NÃO exige repetição lexical — a evidência é estrutural.
+  {
+    const HANGING_CONNECTORS = new Set([
+      "porque", "quando", "como", "para", "pra", "que", "se",
+      "e", "ou", "mas", "pois", "porém", "todavia", "contudo",
+    ]);
+    const RESET_WORDS = new Set([
+      "então", "aí", "bom", "olha", "assim", "bem", "veja",
+      "gente", "pessoal", "enfim", "ok", "beleza",
+    ]);
+    for (let i = 1; i < words.length - 1; i++) {
+      if (!HANGING_CONNECTORS.has(norm[i])) continue;
+      // Procura RESET dentro dos próximos 6s (pra pegar palavras esticadas)
+      let j = i + 1;
+      let foundReset = -1;
+      let sawSignificantGap = false;
+      while (j < words.length && (words[j].start - words[i].end) < 6.0) {
+        const gapFromPrev = j > i + 1 ? (words[j].start - words[j - 1].end) : (words[j].start - words[i].end);
+        const durOfPrev = j > 0 ? (words[j - 1].end - words[j - 1].start) : 0;
+        // "gap suspeito" = gap real OR palavra anterior esticada (Whisper
+        // escondendo hesitação dentro da palavra)
+        if (gapFromPrev >= 0.6 || durOfPrev >= 1.2) sawSignificantGap = true;
+        if (RESET_WORDS.has(norm[j]) && sawSignificantGap) {
+          foundReset = j;
+          break;
+        }
+        // Não atravessa pontuação forte
+        if (/[.!?]$/.test(words[j].word || "")) break;
+        j++;
+      }
+      if (foundReset > i + 1) {
+        const start = words[i].start;                // do conector
+        const end = words[foundReset - 1].end;       // até palavra antes do reset
+        // Tem que ser algo de tamanho razoável e curto (defeito, não conteúdo)
+        const span = end - start;
+        if (span >= 1.0 && span <= 8.0) {
+          results.push({
+            start,
+            end,
+            confidence: 0.85,
+            reason: "abandoned_phrase",
+            source: "speechError",
+            detectedBy: "heuristic",
+            text: words.slice(i, foundReset).map((w) => w.word).join(" "),
           });
         }
       }

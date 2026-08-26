@@ -77,6 +77,27 @@ function isSoundWithoutWordCand(cand) {
   return (cand.text || "").includes("som sem palavra");
 }
 
+// Detecta enumeração dentro de um GRUPO de sentenças (não só entre
+// sentenças distintas). Padrão "falta X falta Y | falta Z falta W" —
+// mesmo dividido em 2 sentenças, se a palavra-âncora aparece 3+ vezes
+// somando o texto de todas, é enumeração retórica, não redundância.
+function groupIsEnumeration(sentencesInGroup) {
+  if (!sentencesInGroup?.length) return false;
+  const norm = (s) => (s || "").toLowerCase().replace(/[.,!?;:"'()]/g, "");
+  const firstOf = (s) => norm((s.text || "").split(/\s+/)[0] || "");
+  const anchor = firstOf(sentencesInGroup[0]);
+  if (!anchor || anchor.length < 2) return false;
+  // Todas as sentenças do grupo precisam começar com o mesmo anchor.
+  if (!sentencesInGroup.every((s) => firstOf(s) === anchor)) return false;
+  // Conta ocorrências do anchor em TODO o texto de todas as sentenças.
+  let count = 0;
+  for (const s of sentencesInGroup) {
+    const toks = (s.text || "").toLowerCase().split(/\s+/).map(norm);
+    count += toks.filter((w) => w === anchor).length;
+  }
+  return count >= 3;
+}
+
 /**
  * Colhe todos os candidatos das fontes disponíveis. Não decide nada — só
  * junta e dedupa.
@@ -135,6 +156,11 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
     const byIndex = new Map((semantic.sentences || []).map((s) => [s.index, s]));
     for (const group of semantic.repeatedGroups) {
       const best = group.bestIndex;
+      // Se o grupo INTEIRO forma enumeração retórica (mesma âncora
+      // repetindo 3+ vezes no texto combinado), descarta o grupo inteiro
+      // — o LLM se enganou classificando como repetição.
+      const groupSentences = (group.indexes || []).map((i) => byIndex.get(i)).filter(Boolean);
+      if (groupIsEnumeration(groupSentences)) continue;
       for (const idx of group.indexes) {
         if (idx === best) continue;
         const s = byIndex.get(idx);
@@ -227,6 +253,12 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
  * confiança máxima. primaryType do de maior confiança prevalece; se
  * empatar, mantém o primeiro.
  */
+// Cortes surgicais (stutter, false_start, abandoned_phrase) marcam bordas
+// exatas de palavra e NÃO podem ser esticados por silêncios adjacentes.
+// Ex.: bigram stutter em [3.84, 4.18] + gap silence em [3.5, 5.0] deve
+// virar [3.84, 4.18], não [3.5, 5.0].
+const SURGICAL_TYPES = new Set(["stutter", "false_start", "abandoned_phrase", "self_correction"]);
+
 export function dedupCandidates(candidates) {
   if (!candidates.length) return [];
   const sorted = [...candidates].sort((a, b) => a.start - b.start);
@@ -238,8 +270,19 @@ export function dedupCandidates(candidates) {
       return minDur > 0 && overlap / minDur >= MERGE_OVERLAP_RATIO;
     });
     if (merged) {
-      merged.start = Math.min(merged.start, cur.start);
-      merged.end = Math.max(merged.end, cur.end);
+      const mergedIsSurgical = SURGICAL_TYPES.has(merged.primaryType);
+      const curIsSurgical = SURGICAL_TYPES.has(cur.primaryType);
+      // Se algum dos dois é surgical, preserva as bordas do surgical.
+      // (Caso ambos sejam surgical, une normal.)
+      if (mergedIsSurgical && !curIsSurgical) {
+        // Mantém bordas do merged.
+      } else if (curIsSurgical && !mergedIsSurgical) {
+        merged.start = cur.start;
+        merged.end = cur.end;
+      } else {
+        merged.start = Math.min(merged.start, cur.start);
+        merged.end = Math.max(merged.end, cur.end);
+      }
       merged.detectors.push(...cur.detectors);
       if ((cur.confidence ?? 0) > (merged.confidence ?? 0)) {
         merged.confidence = cur.confidence;
