@@ -11,6 +11,7 @@ import { transcribe } from "./transcription.js";
 import { analyzeWaveform } from "./audioAnalysis.js";
 import { detectSilences } from "./silenceDetection.js";
 import { detectSpeechErrors } from "./speechErrorDetection.js";
+import { detectSpeechErrorsHeuristic } from "./heuristicSpeechErrors.js";
 import { analyzeSemantics } from "./semanticAnalysis.js";
 import { buildNarrativeMap } from "./narrativeAnalysis.js";
 import { buildEDL } from "./editDecisionList.js";
@@ -72,14 +73,27 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
 
   throwIfAborted(signal);
   step("errors");
-  let speechErrors = [];
+  // Detecção dupla: heurística determinística SEMPRE + LLM em paralelo.
+  // A heurística garante que gagueira/muletas/reinícios óbvios sejam pegos
+  // mesmo quando o LLM devolve vazio. O merger da EDL dedupa por overlap.
+  const heuristicErrors = detectSpeechErrorsHeuristic(words);
+  console.log("[pipeline] heuristic speechErrors:", heuristicErrors.length, heuristicErrors);
+  let llmErrors = [];
   try {
-    speechErrors = await detectSpeechErrors(words, { signal, onUsage });
+    llmErrors = await detectSpeechErrors(words, { signal, onUsage });
+    console.log("[pipeline] LLM speechErrors:", llmErrors.length, llmErrors);
   } catch (err) {
     if (err?.name === "AbortError") throw err;
-    // Non-fatal — pipeline still delivers value without this signal.
-    console.warn("Speech error detection failed, continuing:", err);
+    console.warn("[pipeline] Speech error LLM failed, continuing with heuristic only:", err);
   }
+  const speechErrors = [...heuristicErrors, ...llmErrors];
+  console.log("[pipeline] total speechErrors merged:", speechErrors.length);
+  console.log("[pipeline] semantic result:", {
+    topic: semantic.topic,
+    sentences: semantic.sentences.length,
+    repeatedGroups: semantic.repeatedGroups.length,
+    offTopicIndexes: semantic.offTopicIndexes.length,
+  });
 
   throwIfAborted(signal);
   step("edl");

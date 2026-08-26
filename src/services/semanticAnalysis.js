@@ -96,8 +96,10 @@ async function analyzeChunk(sentences, topicHint, { signal, onUsage } = {}) {
     onUsage,
     operation: "semantic_analysis",
   });
+  console.log("[semanticAnalysis] LLM raw response (first 500 chars):", raw?.slice(0, 500));
   const parsed = extractJSON(raw);
   if (!parsed || typeof parsed !== "object") {
+    console.warn("[semanticAnalysis] Failed to parse JSON. Raw was:", raw);
     return { topic: topicHint || "", sentences: [], repeatedGroups: [], offTopicIndexes: [] };
   }
   return {

@@ -55,8 +55,13 @@ export async function detectSpeechErrors(words, { signal, onUsage } = {}) {
     onUsage,
     operation: "speech_errors",
   });
+  console.log("[speechErrorDetection] LLM raw response:", raw);
   const parsed = extractJSON(raw);
-  if (!Array.isArray(parsed)) return [];
+  if (!Array.isArray(parsed)) {
+    console.warn("[speechErrorDetection] Failed to parse. Returning empty. Raw was:", raw);
+    return [];
+  }
+  console.log("[speechErrorDetection] LLM parsed items:", parsed.length, parsed);
 
   const results = [];
   for (const m of parsed) {
