@@ -56,6 +56,10 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   console.log("[pipeline] Whisper devolveu", words.length, "palavras. Primeiras 60:");
   console.log("[pipeline] transcript (primeiros 30s):",
     words.filter((w) => w.start <= 30).map((w) => w.word).join(" "));
+  // Palavra a palavra com timestamp — pra ver EXATAMENTE onde o
+  // Whisper colocou cada palavra e detectar erros que passam.
+  console.log("[pipeline] palavras timestamped:",
+    words.map((w) => `[${w.start.toFixed(2)}]${w.word}`).join(" "));
 
   let waveform = reuse.waveform;
   if (!waveform) {

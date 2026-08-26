@@ -82,6 +82,14 @@ REGRAS:
 - Pausas e silêncios são decididos por outro módulo — ignore.
 - Reforço narrativo ("isso é muito importante") não é repetição se estiver enfatizando; só marque como repeated_idea quando UMA versão substitui a outra sem perda.
 
+ATENÇÃO: ANÁFORAS RETÓRICAS NÃO SÃO REDUNDÂNCIA.
+Quando várias sentenças consecutivas SEGUEM A MESMA ESTRUTURA para dar ênfase
+(ex: "falta ideia", "falta jeito", "falta técnica", "falta método" — todas
+começando com "falta"; ou "é isso", "é aquilo", "é aquele outro"), isso é
+recurso retórico proposital. TODAS devem ficar como "keep". Nunca marque
+uma frase de anáfora como consider_remove, nem agrupe em repeatedGroups.
+Elas são complementares, não substitutas.
+
 ${topicHint ? `Contexto: o vídeo aparenta ser sobre "${topicHint}". Off_topic só quando claramente desconectado disso.` : ""}
 
 Responda APENAS com um JSON válido, sem markdown, no formato exato:

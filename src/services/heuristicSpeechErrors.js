@@ -14,6 +14,14 @@ const FILLER_WORDS = new Set([
   "né", "sei", "então", "aí",
 ]);
 
+// Palavras que sozinhas, no INÍCIO do vídeo ou depois de silêncio longo,
+// costumam ser trava/hesitação e não conteúdo. "Bom", "Então", "Olha",
+// "Assim", "Aí", "Ah", "Bem" — em fala real são reset words.
+const STANDALONE_HESITATIONS = new Set([
+  "bom", "então", "olha", "assim", "aí", "ah", "bem", "eh", "e", "é",
+  "veja", "vejam", "gente", "pessoal",
+]);
+
 // Frases curtas de auto-interrupção. Se aparecerem, o trecho DO INÍCIO da
 // sentença até essa marca é uma tentativa abandonada.
 const RESTART_MARKERS = [
@@ -151,6 +159,38 @@ export function detectSpeechErrorsHeuristic(words) {
       }
       break; // não checa outros marcadores na mesma posição
     }
+  }
+
+  // 3.5) Hesitação isolada: palavra "reset" ("Bom", "Então", "Olha") que
+  //      aparece SOZINHA cercada por silêncios longos (>= 0.8s antes e/ou
+  //      >= 0.8s depois). Padrão típico de trava inicial ou pausa
+  //      entre pensamentos. Corta a palavra + o silêncio adjacente que
+  //      grudou nela — o silence detector separado pega a parte silenciosa.
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    const normW = norm[i];
+    if (!STANDALONE_HESITATIONS.has(normW)) continue;
+    const prev = words[i - 1];
+    const next = words[i + 1];
+    const gapBefore = prev ? w.start - prev.end : (w.start >= 0.5 ? Infinity : 0);
+    const gapAfter = next ? next.start - w.end : Infinity;
+    // Isolamento: precisa estar sozinho de pelo menos um lado por 0.8s+
+    // Se tiver silêncio dos DOIS lados, mais confiança.
+    const isolatedBefore = gapBefore >= 0.8;
+    const isolatedAfter = gapAfter >= 0.8;
+    if (!(isolatedBefore || isolatedAfter)) continue;
+    // Não marca se a próxima palavra vier logo depois formando frase
+    // ("Bom pessoal, vamos lá") — só quando é hesitação real.
+    if (gapAfter < 0.4) continue;
+    const confidence = isolatedBefore && isolatedAfter ? 0.85 : 0.75;
+    results.push({
+      start: w.start,
+      end: w.end,
+      confidence,
+      reason: "filler",
+      source: "speechError",
+      text: w.word,
+    });
   }
 
   // 4) Reinício de frase sem marcador: duas sentenças consecutivas que
