@@ -60,35 +60,58 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
   const norm = words.map((w) => normalize(w.word));
   const results = [];
 
-  // 0) SOM ANTES DA PRIMEIRA PALAVRA — o "Éeeee..." que o Whisper
-  //    frequentemente não transcreve ou transcreve como "é" curto.
-  //    Se o waveform mostra energia acima de silêncio nos segundos que
-  //    ANTECEDEM a primeira palavra transcrita, marca essa janela como
-  //    hesitação prolongada.
-  if (waveform?.length && words[0].start > 0.4) {
-    const firstWordStart = words[0].start;
-    // Threshold de "com som": acima de 0.02 (mesmo do silence detector default).
-    // Procura o INÍCIO real da fala (primeira janela com som contínuo > 0.2s).
-    let soundStart = null;
-    for (const b of waveform) {
-      if (b.start >= firstWordStart) break;
-      if (b.level >= 0.02) {
-        if (soundStart == null) soundStart = b.start;
-      } else if (soundStart != null && b.start - soundStart >= 0.2) {
-        // Achou um bloco de som pré-fala com > 0.2s. Confirma se é
-        // longo o suficiente pra chamar de hesitação.
-        break;
+  // 0) SOM SEM PALAVRA (waveform + words) — pega "Éeeee...", "aaah",
+  //    "hmmmm" que o Whisper suavizou ou pulou. Estratégia:
+  //    procuramos janelas do waveform com energia >= threshold que NÃO
+  //    têm palavra transcrita dentro (ou têm só palavra muito curta).
+  //    Isso vale tanto no INÍCIO do vídeo quanto no MEIO — entre duas
+  //    palavras com gap grande mas com áudio ativo.
+  if (waveform?.length) {
+    const SOUND_LEVEL = 0.03;         // acima disso = tem áudio (não silêncio)
+    const MIN_HESIT_DUR = 0.40;       // menos que isso não é hesitação relevante
+    // Cria "janelas suspeitas": trechos onde waveform tem som mas não
+    // há palavra transcrita cobrindo majoritariamente.
+    const wordCovers = (t) => words.some((w) => t >= w.start - 0.05 && t < w.end + 0.05);
+    let winStart = null;
+    let winCovered = 0; // tempo dentro da janela que já é coberto por palavra
+    let winTotal = 0;
+    for (let bi = 0; bi < waveform.length; bi++) {
+      const b = waveform[bi];
+      const hasSound = b.level >= SOUND_LEVEL;
+      const covered = wordCovers((b.start + b.end) / 2);
+      if (hasSound && !covered) {
+        if (winStart == null) winStart = b.start;
+        winTotal += (b.end - b.start);
+      } else {
+        // Fim de janela; considera se qualifica.
+        if (winStart != null && winTotal >= MIN_HESIT_DUR) {
+          const winEnd = b.start;
+          // Confidence maior se for no início do vídeo.
+          const conf = winStart < 2 ? 0.9 : 0.78;
+          results.push({
+            start: winStart,
+            end: winEnd,
+            confidence: conf,
+            reason: "filler",
+            source: "speechError",
+            detectedBy: "heuristic",
+            text: winStart < 2 ? "(hesitação inicial)" : "(som sem palavra)",
+          });
+        }
+        winStart = null;
+        winTotal = 0;
       }
     }
-    if (soundStart != null && firstWordStart - soundStart >= 0.4) {
+    // Fecha janela em aberto (caso o vídeo termine com som pré-palavra)
+    if (winStart != null && winTotal >= MIN_HESIT_DUR) {
       results.push({
-        start: soundStart,
-        end: firstWordStart - 0.05,
-        confidence: 0.9,
+        start: winStart,
+        end: waveform[waveform.length - 1].end,
+        confidence: 0.78,
         reason: "filler",
         source: "speechError",
         detectedBy: "heuristic",
-        text: "(hesitação inicial)",
+        text: "(som sem palavra)",
       });
     }
   }

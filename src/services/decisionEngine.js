@@ -64,10 +64,26 @@ function decideOne(cand, { profile, semanticSentences, protectedRanges, words = 
   let contextGuardReason = null;
   let safety = null;
   // Bordas efetivas do corte — começam iguais à do candidato e podem
-  // ser encolhidas pelo boundary refinement mais adiante.
+  // ser encolhidas pelo boundary refinement mais adiante. Cortes
+  // técnicos ganham uma pré-margem (headroom) de 0.3s pra pegar a
+  // respiração/preparação que antecede o defeito. Clampado pra não
+  // ficar negativo nem invadir palavra anterior próxima.
   let cutStart = cand.start;
   let cutEnd = cand.end;
   let boundaryNote = null;
+  if (isTechnical(cand)) {
+    const HEADROOM = 0.30;
+    let headStart = Math.max(0, cand.start - HEADROOM);
+    // Não invade se há palavra que termina dentro da margem — pega até
+    // 0.05s depois do fim da palavra anterior (respiração).
+    if (words?.length) {
+      const prevWord = [...words].reverse().find((w) => w.end <= cand.start);
+      if (prevWord && prevWord.end > headStart) {
+        headStart = Math.max(headStart, prevWord.end + 0.05);
+      }
+    }
+    cutStart = headStart;
+  }
 
   const executeThreshold = pickExecuteThreshold(cand, profile);
   const reviewThreshold = profile.reviewThreshold ?? 0.6;
