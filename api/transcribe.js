@@ -1,5 +1,5 @@
 // Transcription endpoint (v3 aligner: extras vão pra head da palavra atual). DUAL-MODEL:
-//   1. gpt-4o-mini-transcribe → texto FIEL (preserva disfluências, sem
+//   1. gpt-4o-transcribe → texto FIEL (preserva disfluências, sem
 //      normalizar). Sem timestamps.
 //   2. whisper-1 → words com timestamps. Normalização acontece, mas OK
 //      porque só usamos os TIMINGS.
@@ -177,11 +177,11 @@ export default async function handler(req, res) {
 
     const contentType = req.headers["content-type"] || "audio/webm";
 
-    // Chama os dois em paralelo. gpt-4o-mini-transcribe é ~50% mais barato
+    // Chama os dois em paralelo. gpt-4o-transcribe é ~50% mais barato
     // que whisper-1 (por minuto) e captura muito melhor as disfluências.
     const [gpt4oResult, whisperResult] = await Promise.all([
-      callOpenAI("gpt-4o-mini-transcribe", buffer, contentType, { verbose: false }).catch((err) => {
-        console.warn("gpt-4o-mini-transcribe failed:", err?.message || err);
+      callOpenAI("gpt-4o-transcribe", buffer, contentType, { verbose: false }).catch((err) => {
+        console.warn("gpt-4o-transcribe failed:", err?.message || err);
         return { ok: false };
       }),
       callOpenAI("whisper-1", buffer, contentType, { verbose: true }),

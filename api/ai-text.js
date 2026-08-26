@@ -34,7 +34,7 @@ export default async function handler(req, res) {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [{ role: "user", content: prompt }],
         max_tokens: maxTokens || 1500,
         temperature: 0.3,
@@ -50,13 +50,13 @@ export default async function handler(req, res) {
     }
 
     // Grava 1 llmCall no usage do usuário (só se o retorno da OpenAI foi OK).
-    await guard.tick({ llmCalls: 1, meta: { model: data.model || "gpt-4o-mini", latencyMs } });
+    await guard.tick({ llmCalls: 1, meta: { model: data.model || "gpt-4o", latencyMs } });
 
     const usage = data.usage || {};
     res.status(200).json({
       text: data.choices?.[0]?.message?.content || "",
       usage: {
-        model: data.model || "gpt-4o-mini",
+        model: data.model || "gpt-4o",
         inputTokens: usage.prompt_tokens ?? null,
         outputTokens: usage.completion_tokens ?? null,
         totalTokens: usage.total_tokens ?? null,
