@@ -1,4 +1,4 @@
-// Transcription endpoint. DUAL-MODEL:
+// Transcription endpoint (v3 aligner: extras vão pra head da palavra atual). DUAL-MODEL:
 //   1. gpt-4o-mini-transcribe → texto FIEL (preserva disfluências, sem
 //      normalizar). Sem timestamps.
 //   2. whisper-1 → words com timestamps. Normalização acontece, mas OK

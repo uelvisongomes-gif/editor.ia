@@ -30,38 +30,101 @@ const SURGICAL_ERROR_REASONS = new Set([
   "silence", "no_speech", "long_pause",
 ]);
 
-// Enumeração cross-sentença ("falta ideia, falta jeito, falta técnica,
-// falta método"): 3+ sentenças consecutivas começando com a MESMA palavra.
-// Dentro desse span, cortes por "repeated_idea", "low_value" e
-// "sound_without_word" são silenciados — todos os itens são intencionais.
-export function detectEnumerationSpans(sentences) {
-  if (!sentences?.length) return [];
-  const firstWord = (s) => {
-    const raw = (s.text || "").toLowerCase().replace(/^[.,;:!?()\s]+/, "");
-    const first = raw.split(/\s+/)[0] || "";
-    return first.replace(/[.,;:!?()"']/g, "");
-  };
-  const sorted = [...sentences].sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+// Enumeração ("falta X, falta Y, falta Z..."): detectada DIRETO das
+// palavras — 3+ ocorrências da mesma palavra atuando como item-opener
+// (aparecendo logo após vírgula/ponto OU no início) dentro de janela de
+// 12s. Não depende de segmentação do LLM. Cobre também casos onde o
+// item aparece no MEIO da frase ("porque falta ideia falta jeito
+// falta técnica...").
+function normWord(s) {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/[.,!?;:"'()]/g, "")
+    .trim();
+}
+
+export function detectEnumerationSpans(sentences, words = []) {
   const spans = [];
-  let i = 0;
-  while (i < sorted.length) {
-    const anchor = firstWord(sorted[i]);
-    if (!anchor || anchor.length < 2) { i += 1; continue; }
-    let j = i + 1;
-    while (j < sorted.length && firstWord(sorted[j]) === anchor) j += 1;
-    if (j - i >= 3) {
-      spans.push({
-        start: sorted[i].start,
-        end: sorted[j - 1].end,
-        anchor,
-        count: j - i,
-      });
-      i = j;
-    } else {
-      i += 1;
+
+  // Regra A: 3+ sentenças consecutivas começando com mesma palavra.
+  if (sentences?.length) {
+    const firstWord = (s) => normWord((s.text || "").split(/\s+/)[0] || "");
+    const sorted = [...sentences].sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+    let i = 0;
+    while (i < sorted.length) {
+      const anchor = firstWord(sorted[i]);
+      if (!anchor || anchor.length < 2) { i += 1; continue; }
+      let j = i + 1;
+      while (j < sorted.length && firstWord(sorted[j]) === anchor) j += 1;
+      if (j - i >= 3) {
+        spans.push({ start: sorted[i].start, end: sorted[j - 1].end, anchor, count: j - i });
+        i = j;
+      } else {
+        i += 1;
+      }
     }
   }
-  return spans;
+
+  // Regra B (mais robusta): 3+ ocorrências da MESMA palavra num intervalo
+  // de 12s onde cada ocorrência (exceto a 1ª) vem logo depois de uma
+  // vírgula/ponto (padrão inequívoco de enumeração retórica).
+  if (words?.length) {
+    for (let i = 0; i < words.length; i++) {
+      const anchor = normWord(words[i].word);
+      if (anchor.length < 3) continue; // ignora "e", "a", "o"
+      const openerHits = [i];
+      const WINDOW = 12;
+      for (let j = i + 1; j < words.length && (words[j].start - words[i].start) <= WINDOW; j++) {
+        if (normWord(words[j].word) !== anchor) continue;
+        // Item-opener: palavra anterior termina em vírgula/ponto.
+        const prev = words[j - 1];
+        const prevRaw = prev ? (prev.word || "") : "";
+        const isOpener = /[,.;:!?]$/.test(prevRaw);
+        if (isOpener) openerHits.push(j);
+      }
+      // Filtra hits colados (stutter da mesma palavra, tipo "falta,
+      // falta, falta" tudo em 0.3s NÃO é enumeração — é gagueira). Cada
+      // hit precisa estar ao menos 0.5s do hit spaced anterior.
+      const spaced = [];
+      for (const idx of openerHits) {
+        const last = spaced[spaced.length - 1];
+        if (!last || words[idx].start - words[last].start >= 0.5) spaced.push(idx);
+      }
+      if (spaced.length >= 3) {
+        const firstIdx = spaced[0];
+        const lastIdx = spaced[spaced.length - 1];
+        const totalSpan = words[lastIdx].start - words[firstIdx].start;
+        if (totalSpan < 2.0) { i = lastIdx; continue; } // muito curto → não é enumeração
+        let endIdx = lastIdx;
+        while (endIdx < words.length - 1 && (words[endIdx].end - words[lastIdx].start) < 1.5) {
+          if (/[.!?]$/.test(words[endIdx].word || "")) break;
+          endIdx += 1;
+        }
+        spans.push({
+          start: words[firstIdx].start,
+          end: words[endIdx].end,
+          anchor,
+          count: spaced.length,
+        });
+        i = lastIdx;
+      }
+    }
+  }
+
+  // Merge de spans sobrepostos
+  spans.sort((a, b) => a.start - b.start);
+  const merged = [];
+  for (const s of spans) {
+    const last = merged[merged.length - 1];
+    if (last && s.start <= last.end + 0.5) {
+      last.end = Math.max(last.end, s.end);
+      last.count = Math.max(last.count, s.count);
+    } else {
+      merged.push({ ...s });
+    }
+  }
+  return merged;
 }
 
 const ENUMERATION_BLOCKED_TYPES = new Set([
@@ -104,7 +167,7 @@ function groupIsEnumeration(sentencesInGroup) {
  */
 export function collectCandidates({ words, semantic, silences, speechErrors, profile }) {
   const candidates = [];
-  const enumerationSpans = detectEnumerationSpans(semantic?.sentences || []);
+  const enumerationSpans = detectEnumerationSpans(semantic?.sentences || [], words || []);
   const inEnumeration = (cand) => enumerationSpans.some((sp) => candidateInSpan(cand, sp));
 
   // 1) Silêncios (sempre considerados).
@@ -265,6 +328,15 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
     if (c.detectors?.some((d) => REASONS_BLOCKED_IN_ENUM.has(d.reason))) return true;
     return false;
   };
+  // Considera surgical qualquer candidate cujo primaryType OU qualquer
+  // detector subjacente seja stutter/false_start/abandoned_phrase — o
+  // merge pode ter escolhido "filler" como primary só porque a
+  // confidence do LLM era 0.90 vs 0.88 da heurística stutter.
+  const isSurgicalCandidate = (c) => {
+    if (SURGICAL_TYPES.has(c.primaryType)) return true;
+    if (c.detectors?.some((d) => SURGICAL_TYPES.has(d.reason))) return true;
+    return false;
+  };
   const clamped = [];
   for (const c of candidates) {
     let s = c.start, e = c.end;
@@ -272,7 +344,7 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
     let killed = false;
     for (const sp of enumerationSpans) {
       const midInside = mid >= sp.start && mid <= sp.end;
-      if (midInside && !SURGICAL_TYPES.has(c.primaryType) && isBlockedByReasonOrText(c)) {
+      if (midInside && !isSurgicalCandidate(c) && isBlockedByReasonOrText(c)) {
         killed = true; break;
       }
       // Encolhe se cruza borda (mesmo pra surgical)
