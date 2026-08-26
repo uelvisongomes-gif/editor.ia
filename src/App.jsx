@@ -85,6 +85,58 @@ function computeZoomScale(t, zoomEnabled, zoomIntensity, zoomCues = null) {
 }
 
 const CAPTION_STYLES = [
+  // ====== Estilos premium (top de linha) ======
+  {
+    id: "tiktok", label: "TikTok Bold",
+    textColor: "#FFFFFF", strokeColor: "#000000", strokeWidth: 12,
+    bg: null, position: "middle-bottom", uppercase: true, weight: 900,
+    sizeScale: 1.35, fontFamily: "'Inter', 'Arial Black', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.6)", blur: 8, offsetY: 4 },
+  },
+  {
+    id: "mrbeast", label: "MrBeast Gold",
+    textColor: "#FFD400", strokeColor: "#000000", strokeWidth: 14,
+    bg: null, position: "middle-bottom", uppercase: true, weight: 900,
+    sizeScale: 1.5, fontFamily: "'Impact', 'Arial Black', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.8)", blur: 12, offsetY: 6 },
+  },
+  {
+    id: "neon", label: "Neon Cyber",
+    textColor: "#00FFF0", strokeColor: "#000000", strokeWidth: 8,
+    bg: null, position: "middle-bottom", uppercase: true, weight: 900,
+    sizeScale: 1.3, fontFamily: "'Inter', 'Arial Black', sans-serif",
+    shadow: { color: "#00FFF0", blur: 24, offsetY: 0 },
+  },
+  {
+    id: "karaoke", label: "Karaokê (palavra por palavra)",
+    textColor: "#FFFFFF", highlightColor: "#FFEB3B", strokeColor: "#000000",
+    strokeWidth: 10, bg: null, position: "middle-bottom", uppercase: true,
+    weight: 900, sizeScale: 1.35, fontFamily: "'Inter', 'Arial Black', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.7)", blur: 8, offsetY: 4 },
+    perWord: true,
+  },
+  {
+    id: "cinema", label: "Cinema",
+    textColor: "#FFFFFF", strokeColor: null, strokeWidth: 0,
+    bg: null, position: "bottom", uppercase: false, weight: 600,
+    sizeScale: 0.95, fontFamily: "'Georgia', serif",
+    shadow: { color: "rgba(0,0,0,0.9)", blur: 6, offsetY: 3 },
+  },
+  {
+    id: "reels", label: "Reels Pill",
+    textColor: "#FFFFFF", strokeColor: null, strokeWidth: 0,
+    bg: "rgba(0,0,0,0.85)", position: "middle-bottom", uppercase: false,
+    weight: 700, sizeScale: 1.05, fontFamily: "'Inter', sans-serif",
+    pillRadius: 999,
+  },
+  {
+    id: "pop", label: "Pop Pink",
+    textColor: "#FF3EA5", strokeColor: "#FFFFFF", strokeWidth: 10,
+    bg: null, position: "middle-bottom", uppercase: true, weight: 900,
+    sizeScale: 1.3, fontFamily: "'Inter', 'Arial Black', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.55)", blur: 10, offsetY: 4 },
+  },
+  // ====== Estilos básicos (mantidos por compatibilidade) ======
   { id: "classic", label: "Clássico", textColor: "#ffffff", strokeColor: null, strokeWidth: 0, bg: "rgba(0,0,0,0.65)", position: "bottom", uppercase: false, weight: 700, sizeScale: 1 },
   { id: "impact", label: "Destaque", textColor: "#ffffff", strokeColor: "#000000", strokeWidth: 8, bg: null, position: "middle-bottom", uppercase: true, weight: 900, sizeScale: 1.3 },
   { id: "yellow", label: "Amarelo impacto", textColor: "#FFD400", strokeColor: "#000000", strokeWidth: 8, bg: null, position: "bottom", uppercase: true, weight: 900, sizeScale: 1.2 },
@@ -95,6 +147,24 @@ const CAPTION_STYLES = [
 const CAPTION_Y_FRACTION = { bottom: 0.93, "middle-bottom": 0.78, top: 0.12, center: 0.5 };
 
 const TRANSITION_DURATION = 0.25; // seconds each fade takes
+
+function wrapTextByWidth(ctx, text, maxWidth) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines = [];
+  let cur = "";
+  for (const w of words) {
+    const trial = cur ? cur + " " + w : w;
+    const m = ctx.measureText(trial);
+    if (m.width <= maxWidth) {
+      cur = trial;
+    } else {
+      if (cur) lines.push(cur);
+      cur = w;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [text];
+}
 
 function drawFrame(ctx, video, canvas, colorAdjust, captions, t, zoomScale = 1, captionStyle = CAPTION_STYLES[0], opacity = 1) {
   ctx.save();
@@ -112,42 +182,137 @@ function drawFrame(ctx, video, canvas, colorAdjust, captions, t, zoomScale = 1, 
   ctx.globalAlpha = 1;
   ctx.filter = "none";
   ctx.restore();
+
   const cue = captions.find((c) => t >= c.start && t < c.end);
-  if (cue) {
-    const text = captionStyle.uppercase ? cue.text.toUpperCase() : cue.text;
-    const fontSize = Math.max(14, Math.round(canvas.height * 0.045 * captionStyle.sizeScale));
-    ctx.font = `${captionStyle.weight} ${fontSize}px sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    const maxWidth = canvas.width * 0.88;
-    const yFrac = CAPTION_Y_FRACTION[captionStyle.position] ?? 0.93;
-    const y = canvas.height * yFrac;
-    const textWidth = Math.min(maxWidth, ctx.measureText(text).width);
-    if (captionStyle.bg) {
-      const paddingX = 20, paddingY = 12;
-      const boxWidth = textWidth + paddingX * 2;
-      const boxHeight = fontSize + paddingY * 2;
-      const boxX = canvas.width / 2 - boxWidth / 2;
-      const boxY = y - boxHeight / 2;
-      ctx.fillStyle = captionStyle.bg;
-      if (ctx.roundRect) {
-        ctx.beginPath();
-        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 8);
-        ctx.fill();
-      } else {
-        ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+  if (!cue) return;
+
+  const rawText = cue.text || "";
+  const text = captionStyle.uppercase ? rawText.toUpperCase() : rawText;
+  const fontSize = Math.max(14, Math.round(canvas.height * 0.045 * captionStyle.sizeScale));
+  const fontFamily = captionStyle.fontFamily || "sans-serif";
+  ctx.font = `${captionStyle.weight} ${fontSize}px ${fontFamily}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const maxWidth = canvas.width * 0.86;
+  const yFrac = CAPTION_Y_FRACTION[captionStyle.position] ?? 0.93;
+  const centerY = canvas.height * yFrac;
+
+  // Modo karaokê: renderiza palavra-a-palavra com a atual em destaque.
+  if (captionStyle.perWord && cue.words?.length) {
+    const activeIdx = cue.words.findIndex((w) => t >= w.start && t < w.end);
+    // Divide as palavras em linhas usando medição
+    const items = cue.words.map((w) => (captionStyle.uppercase ? (w.word || "").toUpperCase() : (w.word || "")));
+    const lines = [];
+    const idxToLine = [];
+    let curItems = [];
+    let curIdxs = [];
+    const spaceW = ctx.measureText(" ").width;
+    let curWidth = 0;
+    for (let i = 0; i < items.length; i++) {
+      const wtxt = items[i];
+      const w = ctx.measureText(wtxt).width;
+      const add = (curItems.length ? spaceW : 0) + w;
+      if (curWidth + add > maxWidth && curItems.length) {
+        lines.push({ items: curItems, idxs: curIdxs });
+        curItems = []; curIdxs = []; curWidth = 0;
       }
+      curItems.push(wtxt); curIdxs.push(i);
+      curWidth += (curItems.length > 1 ? spaceW : 0) + w;
     }
+    if (curItems.length) lines.push({ items: curItems, idxs: curIdxs });
+    lines.forEach((ln) => ln.idxs.forEach((idx, k) => idxToLine[idx] = { lineIdx: lines.indexOf(ln), posInLine: k }));
+
+    const lineHeight = fontSize * 1.15;
+    const totalHeight = lineHeight * lines.length;
+    const startY = centerY - totalHeight / 2 + lineHeight / 2;
+
+    lines.forEach((ln, li) => {
+      const lineText = ln.items.join(" ");
+      const lineWidth = ctx.measureText(lineText).width;
+      const y = startY + li * lineHeight;
+      let cursorX = canvas.width / 2 - lineWidth / 2;
+      ctx.textAlign = "left";
+      // Stroke primeiro pra toda a linha
+      if (captionStyle.strokeColor && captionStyle.strokeWidth) {
+        ctx.lineJoin = "round";
+        ctx.miterLimit = 2;
+        ctx.lineWidth = captionStyle.strokeWidth;
+        ctx.strokeStyle = captionStyle.strokeColor;
+        applyShadowFor(ctx, captionStyle);
+        ctx.strokeText(lineText, cursorX, y);
+        clearShadow(ctx);
+      }
+      // Fill palavra por palavra
+      let x = cursorX;
+      for (let k = 0; k < ln.items.length; k++) {
+        const wtxt = ln.items[k];
+        const globalIdx = ln.idxs[k];
+        const isActive = globalIdx === activeIdx;
+        ctx.fillStyle = isActive ? (captionStyle.highlightColor || "#FFEB3B") : captionStyle.textColor;
+        applyShadowFor(ctx, captionStyle);
+        ctx.fillText(wtxt, x, y);
+        clearShadow(ctx);
+        x += ctx.measureText(wtxt).width + spaceW;
+      }
+      ctx.textAlign = "center"; // reset
+    });
+    return;
+  }
+
+  // Modo normal: quebra em linhas se necessário
+  const lines = wrapTextByWidth(ctx, text, maxWidth);
+  const lineHeight = fontSize * 1.15;
+  const totalHeight = lineHeight * lines.length;
+  const startY = centerY - totalHeight / 2 + lineHeight / 2;
+
+  if (captionStyle.bg) {
+    const paddingX = 24, paddingY = 12;
+    const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
+    const boxWidth = widest + paddingX * 2;
+    const boxHeight = totalHeight + paddingY * 2;
+    const boxX = canvas.width / 2 - boxWidth / 2;
+    const boxY = centerY - boxHeight / 2;
+    const radius = captionStyle.pillRadius ?? 12;
+    ctx.fillStyle = captionStyle.bg;
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, boxWidth, boxHeight, Math.min(radius, boxHeight / 2));
+      ctx.fill();
+    } else {
+      ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+    }
+  }
+
+  lines.forEach((line, i) => {
+    const y = startY + i * lineHeight;
     if (captionStyle.strokeColor && captionStyle.strokeWidth) {
       ctx.lineJoin = "round";
       ctx.miterLimit = 2;
       ctx.lineWidth = captionStyle.strokeWidth;
       ctx.strokeStyle = captionStyle.strokeColor;
-      ctx.strokeText(text, canvas.width / 2, y, maxWidth);
+      applyShadowFor(ctx, captionStyle);
+      ctx.strokeText(line, canvas.width / 2, y);
+      clearShadow(ctx);
     }
+    applyShadowFor(ctx, captionStyle);
     ctx.fillStyle = captionStyle.textColor;
-    ctx.fillText(text, canvas.width / 2, y, maxWidth);
-  }
+    ctx.fillText(line, canvas.width / 2, y);
+    clearShadow(ctx);
+  });
+}
+
+function applyShadowFor(ctx, style) {
+  if (!style.shadow) return;
+  ctx.shadowColor = style.shadow.color || "rgba(0,0,0,0.6)";
+  ctx.shadowBlur = style.shadow.blur || 6;
+  ctx.shadowOffsetY = style.shadow.offsetY || 0;
+  ctx.shadowOffsetX = style.shadow.offsetX || 0;
+}
+function clearShadow(ctx) {
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.shadowOffsetX = 0;
 }
 
 function wordRangeToTime(startWord, endWord, totalWords, duration) {
@@ -207,6 +372,12 @@ function buildCaptionsFromWords(words, maxWords = 8, pauseGap = 0.6) {
         start: cueStart,
         end: w.end,
         text: current.map((c) => c.word).join(" ").trim(),
+        // Per-word timings pra estilos karaokê / word-highlight
+        words: current.map((c) => ({
+          word: (c.word || "").replace(/[.,!?;:]$/, ""),
+          start: c.start,
+          end: c.end,
+        })),
       });
       current = [];
     }
