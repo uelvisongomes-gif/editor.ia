@@ -199,6 +199,7 @@ export const CONTEXT_GUARD_LABELS = {
   previous_segment_expects_continuation: "Fala anterior fica incompleta sem este trecho",
   role_protected: "Trecho protegido (hook/CTA)",
   repetition_versions_look_complementary: "Repetição aparente pode ser complemento, não redundância",
+  part_of_rhetorical_anaphora: "Parte de estrutura repetida propositalmente (anáfora)",
 };
 
 export function labelContextGuard(code) {

@@ -38,6 +38,17 @@ export default async function handler(req, res) {
     form.append("model", "whisper-1");
     form.append("response_format", "verbose_json");
     form.append("timestamp_granularities[]", "word");
+    // Baixa temperatura para reduzir "criatividade" do Whisper — melhora
+    // fidelidade e tende a manter gagueiras/muletas em vez de suavizar.
+    form.append("temperature", "0");
+    // Prompt de estilo: reforça que a transcrição deve preservar
+    // disfluências. Whisper usa este texto como pista de estilo/vocabulário.
+    // Ele NÃO é adicionado ao output — só influencia como o modelo decodifica.
+    form.append(
+      "prompt",
+      "Transcrição literal de fala em português brasileiro, preservando repetições de palavras, muletas (é, tipo, né), hesitações (ah, uh, hum) e falsos começos exatamente como falados. Não normalize."
+    );
+    form.append("language", "pt");
 
     const t0 = Date.now();
     const openaiResp = await fetch("https://api.openai.com/v1/audio/transcriptions", {

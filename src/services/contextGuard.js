@@ -148,6 +148,31 @@ export function evaluateContext({ candidate, sentences }) {
     return { ok: false, reason: "role_protected", matched: target.role };
   }
 
+  // Rule 4.5: ANÁFORA — se a sentença é parte de uma sequência de 2+
+  // sentenças consecutivas que começam com a MESMA palavra (ou palavra
+  // muito parecida), é recurso retórico. Não removível.
+  {
+    const idx = bestIdx;
+    const targetFirstWord = normalize(target.text).split(" ")[0] || "";
+    if (targetFirstWord && targetFirstWord.length >= 2) {
+      // Conta vizinhos (antes E depois) que começam com a mesma palavra.
+      let anaphoricSiblings = 0;
+      for (let j = Math.max(0, idx - 2); j <= Math.min(sentences.length - 1, idx + 2); j++) {
+        if (j === idx) continue;
+        const s = sentences[j];
+        const firstWord = normalize(s.text).split(" ")[0] || "";
+        if (firstWord === targetFirstWord) anaphoricSiblings += 1;
+      }
+      if (anaphoricSiblings >= 1) {
+        // Verifica também que a sentença é curta (anáforas costumam ser curtas)
+        const wordCount = normalize(target.text).split(" ").filter(Boolean).length;
+        if (wordCount <= 8) {
+          return { ok: false, reason: "part_of_rhetorical_anaphora", matched: targetFirstWord };
+        }
+      }
+    }
+  }
+
   // Rule 5: Repetition specifically — only allow if the SUBSTITUTE (bestIndex
   // of its group) is textually close in length; otherwise the versions are
   // likely complementary, not redundant. The EDL builder is the one that

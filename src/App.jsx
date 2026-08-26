@@ -250,12 +250,10 @@ function pickTickInterval(duration) {
 }
 
 const TIMELINE_LEGEND = [
-  { label: "Vídeo", color: "#378ADD" },
+  { label: "Mantido", color: "#378ADD" },
+  { label: "Será cortado", color: "#FF6A2B" },
+  { label: "A revisar", color: "#FFB020" },
   { label: "Áudio", color: "#7C5CFF" },
-  { label: "Legendas", color: "#1D9E75" },
-  { label: "Efeitos", color: "#FFB020" },
-  { label: "Transições", color: "#5C8AFF" },
-  { label: "IA Aplicada", color: "#FF6A2B" },
 ];
 
 function seekTo(video, time) {
@@ -461,6 +459,11 @@ export default function AiVideoEditor() {
   const [edl, setEdl] = useState([]);
   const [problemCandidates, setProblemCandidates] = useState([]);
   const [narrativeTopic, setNarrativeTopic] = useState("");
+  // --- Diagnóstico forense ---
+  // Cada entrada captura o que o pipeline "viu" numa janela específica que o
+  // usuário marcou manualmente como erro NÃO detectado.
+  const [missedDetections, setMissedDetections] = useState([]);
+  const [markStart, setMarkStart] = useState(null); // timestamp em s ou null
   const [smartDone, setSmartDone] = useState(false);
   // Toggles the "watch edited version" mode. When true, the player jumps
   // through segments with action !== "review" && !deleted, in order.
@@ -1303,6 +1306,82 @@ async function callMistakeDetectionAPI(words) {
   };
 
   const togglePreviewMode = () => setPreviewMode((v) => !v);
+
+  // --- Diagnóstico: marcar erro não detectado ---
+  const markMissedStart = () => {
+    setMarkStart(currentTime);
+    showToast(`Início marcado em ${currentTime.toFixed(2)}s`);
+  };
+  const markMissedEnd = () => {
+    if (markStart == null) {
+      showToast("Marque o início primeiro (Play até o ponto e clique 'Marcar início')");
+      return;
+    }
+    const start = Math.min(markStart, currentTime);
+    const end = Math.max(markStart, currentTime);
+    if (end - start < 0.1) {
+      showToast("Janela curta demais");
+      return;
+    }
+    // Captura tudo que o pipeline viu naquela janela.
+    const words = cachedRef.current.words || [];
+    const overlap = 0.3;
+    const wordsInRange = words.filter((w) => w.start >= start - overlap && w.end <= end + overlap);
+    const rawText = wordsInRange.map((w) => w.word).join(" ");
+    const candidatesInRange = problemCandidates.filter((c) => {
+      const ov = Math.max(0, Math.min(c.end, end) - Math.max(c.start, start));
+      return ov > 0;
+    });
+    const segmentsInRange = segments.filter((s) => {
+      const ov = Math.max(0, Math.min(s.end, end) - Math.max(s.start, start));
+      return ov > 0;
+    });
+    const capture = {
+      id: "missed-" + Date.now().toString(36),
+      markedAt: new Date().toISOString(),
+      start, end,
+      duration: +(end - start).toFixed(2),
+      rawText,
+      wordsInRange,
+      candidatesInRange,
+      segmentsInRange,
+      detectedBySpeechError: candidatesInRange.some((c) => c.detectors?.some((d) => d.detector === "heuristic" || d.detector === "llm")),
+      detectedBySemantic: candidatesInRange.some((c) => c.detectors?.some((d) => d.detector === "semantic" || d.detector === "narrative")),
+      detectedBySilence: candidatesInRange.some((c) => c.detectors?.some((d) => d.detector === "silence")),
+      finalActions: candidatesInRange.map((c) => ({ id: c.id, type: c.primaryType, action: c.finalAction, confidence: c.confidence, blocked: c.blockedReasons })),
+    };
+    setMissedDetections((prev) => [...prev, capture]);
+    setMarkStart(null);
+    showToast(`Erro marcado (${capture.duration}s) — ${candidatesInRange.length} candidato(s) na janela`);
+    console.log("[missedDetection] captured:", capture);
+  };
+  const clearMissedDetections = () => setMissedDetections([]);
+
+  // Exporta um JSON completo pra debug offline.
+  const exportDiagnostic = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      video: { fileName, durationSec: duration, size: rawFile?.size ?? null },
+      profile: intensityId,
+      narrativeTopic,
+      words: cachedRef.current.words || [],
+      transcript: (cachedRef.current.words || []).map((w) => w.word).join(" "),
+      edl,
+      segments,
+      problemCandidates,
+      missedDetections,
+      usage: usageLogRef.current,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `diagnostico-${projectName || fileName || "editor"}-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   // Ao aceitar/rejeitar um problemCandidate do painel, aplicamos o efeito
   // na timeline. Se já existe um segment cobrindo o candidato, apenas
@@ -2340,26 +2419,44 @@ async function callMistakeDetectionAPI(words) {
                       </div>
                     </div>
 
-                    {/* Video segments */}
+                    {/* Video segments — cor por status:
+                        azul  = keep (mantido)
+                        laranja sólido = remove (será cortado)
+                        amarelo listrado = review (a revisar)
+                        cinza hachurado = trim (encurtar) */}
                     <div className="absolute left-0 right-0" style={{ top: 90, height: 22 }}>
                       <TrackLabel text="Cortes" />
                       <div className="absolute inset-0" style={{ paddingLeft: 46 }}>
                         <div className="relative w-full h-full">
-                          {segments.map((seg) => (
-                            <div
-                              key={seg.id}
-                              onClick={(e) => { e.stopPropagation(); setSelectedSegId(seg.id); handleSeek(seg.start); }}
-                              style={{
-                                position: "absolute",
-                                left: `${(seg.start / duration) * 100}%`,
-                                width: `${Math.max(0.3, ((seg.end - seg.start) / duration) * 100)}%`,
-                                top: 2, bottom: 2,
-                                background: seg.deleted ? "repeating-linear-gradient(45deg,#26262E,#26262E 4px,#1B1B21 4px,#1B1B21 8px)" : "#378ADD",
-                                border: selectedSegId === seg.id ? "1.5px solid #FF6A2B" : "1px solid #0A0A0D",
-                                borderRadius: 4,
-                              }}
-                            />
-                          ))}
+                          {segments.map((seg) => {
+                            let bg;
+                            if (seg.action === "review") {
+                              bg = "repeating-linear-gradient(45deg,#FFB020,#FFB020 4px,#7A5510 4px,#7A5510 8px)";
+                            } else if (seg.deleted && (seg.action === "remove" || !seg.action)) {
+                              bg = "#FF6A2B";
+                            } else if (seg.deleted && seg.action === "trim") {
+                              bg = "repeating-linear-gradient(45deg,#26262E,#26262E 4px,#1B1B21 4px,#1B1B21 8px)";
+                            } else {
+                              bg = "#378ADD";
+                            }
+                            return (
+                              <div
+                                key={seg.id}
+                                onClick={(e) => { e.stopPropagation(); setSelectedSegId(seg.id); handleSeek(seg.start); }}
+                                title={seg.action === "review" ? "A revisar" : seg.deleted ? "Será cortado" : "Mantido"}
+                                style={{
+                                  position: "absolute",
+                                  left: `${(seg.start / duration) * 100}%`,
+                                  width: `${Math.max(0.3, ((seg.end - seg.start) / duration) * 100)}%`,
+                                  top: 2, bottom: 2,
+                                  background: bg,
+                                  border: selectedSegId === seg.id ? "1.5px solid #FFFFFF" : "1px solid #0A0A0D",
+                                  borderRadius: 4,
+                                  cursor: "pointer",
+                                }}
+                              />
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
@@ -2488,6 +2585,58 @@ async function callMistakeDetectionAPI(words) {
             </div>
 
             <div className="md:col-span-3 flex flex-col gap-3">
+              {(edl.length > 0 || smartBusy) && (
+                <Panel title="Diagnóstico do pipeline">
+                  <p style={{ color: "#9A9AA5" }} className="text-[11px] mb-2 leading-snug">
+                    Rebobina o vídeo até o início do erro, clique <strong>Marcar início</strong>,
+                    depois até o fim e clique <strong>Marcar fim</strong>. O sistema captura o que
+                    o pipeline viu naquela janela.
+                  </p>
+                  <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                    <button onClick={markMissedStart}
+                      style={{ background: "#1B1B21", color: markStart != null ? "#5DCAA5" : "#C9C9D1" }}
+                      className="text-[11px] px-2 py-1 rounded-md font-semibold">
+                      {markStart != null ? `Início: ${markStart.toFixed(2)}s` : "Marcar início"}
+                    </button>
+                    <button onClick={markMissedEnd}
+                      disabled={markStart == null}
+                      style={{ background: markStart != null ? "#FF6A2B" : "#1B1B21", color: markStart != null ? "#1A0A02" : "#4A4A54" }}
+                      className="text-[11px] px-2 py-1 rounded-md font-semibold">
+                      Marcar fim
+                    </button>
+                    <button onClick={exportDiagnostic}
+                      style={{ background: "#1B1B21", color: "#78BAFF" }}
+                      className="text-[11px] px-2 py-1 rounded-md font-semibold">
+                      ⇩ Exportar JSON
+                    </button>
+                  </div>
+                  {missedDetections.length > 0 && (
+                    <div style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} className="rounded-lg p-2 mb-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span style={{ color: "#FFB020" }} className="text-[10px] font-bold uppercase">Erros não detectados ({missedDetections.length})</span>
+                        <button onClick={clearMissedDetections} style={{ color: "#F09595" }} className="text-[10px]">limpar</button>
+                      </div>
+                      <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                        {missedDetections.map((m) => (
+                          <div key={m.id} className="text-[10px]" style={{ color: "#C9C9D1" }}>
+                            <div className="flex justify-between">
+                              <span style={{ color: "#F5F5F7" }}>{m.start.toFixed(2)}→{m.end.toFixed(2)} ({m.duration}s)</span>
+                              <span style={{ color: m.detectedBySpeechError || m.detectedBySemantic || m.detectedBySilence ? "#5DCAA5" : "#F09595" }}>
+                                {m.detectedBySpeechError || m.detectedBySemantic || m.detectedBySilence ? "detectado" : "NÃO detectado"}
+                              </span>
+                            </div>
+                            {m.rawText && <div style={{ color: "#9A9AA5" }} className="italic">"{m.rawText.slice(0, 120)}"</div>}
+                            <div style={{ color: "#6B6B75" }}>
+                              speechError:{m.detectedBySpeechError ? "sim" : "não"} · semantic:{m.detectedBySemantic ? "sim" : "não"} · silence:{m.detectedBySilence ? "sim" : "não"} · candidatos:{m.candidatesInRange.length}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </Panel>
+              )}
+
               {(edl.length > 0 || smartBusy) && (
                 <Panel title="Problemas encontrados">
                   <div className="flex items-center justify-between mb-3 text-[11px]">
