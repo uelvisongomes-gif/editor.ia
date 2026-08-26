@@ -331,42 +331,58 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
     });
   }
 
-  // 3.6) PALAVRA FUNCIONAL ESTICADA (artefato do Whisper).
-  //      Quando o Whisper atribui duração enorme a uma palavrinha ("das",
-  //      "que", "e", "de"...) que na fala real dura ~200ms, ele está
-  //      escondendo repetição/hesitação ali dentro. Ex.: user falou
-  //      "na maioria, na maioria das vezes" e a segunda "na maioria" ficou
-  //      colada no timing da palavra "das" (que virou 1.7s de duração).
-  //      Marca o miolo dessa palavra pra corte. Deixa 250ms de margem em
-  //      cada ponta pra preservar o áudio real da própria palavra.
-  {
-    const FUNCTION_WORDS = new Set([
-      "o", "a", "os", "as", "um", "uma", "uns", "umas",
-      "de", "do", "da", "dos", "das", "em", "no", "na", "nos", "nas",
-      "ao", "à", "aos", "às", "com", "por", "pra", "pro", "pras", "pros",
-      "e", "ou", "mas", "que", "se", "é",
-      "me", "te", "lhe", "lhes",
-    ]);
-    const SUSPICIOUS_DUR = 0.8;
-    const EDGE_MARGIN = 0.25;
-    for (let i = 0; i < words.length; i++) {
-      const w = words[i];
-      const raw = norm[i];
-      if (!FUNCTION_WORDS.has(raw)) continue;
+  // 3.6) DEAD ZONE DENTRO DE PALAVRA (Whisper esticou timing pra dentro
+  //      de pausa/repetição). Rege pra QUALQUER palavra (funcional ou de
+  //      conteúdo) com duração > 1.5s. Usa waveform como evidência dura:
+  //      se houver ≥ 500ms de silêncio contínuo DENTRO do timing da
+  //      palavra, esse silêncio é o corte candidato. Isso pega:
+  //        - palavra funcional ("das") esticada porque escondeu "na maioria"
+  //        - palavra de conteúdo ("ideia") esticada porque escondeu pausa
+  //        - qualquer outro artefato de timing do Whisper
+  //      Sem waveform, não faz nada (evita falsos positivos por chute).
+  if (waveform?.length) {
+    const SILENCE_LEVEL = 0.025;
+    const MIN_HIDDEN_SILENCE = 0.5;
+    const MIN_WORD_DUR = 1.5;
+    for (const w of words) {
       const dur = w.end - w.start;
-      if (dur < SUSPICIOUS_DUR) continue;
-      const cutStart = w.start + EDGE_MARGIN;
-      const cutEnd = w.end - EDGE_MARGIN;
-      if (cutEnd - cutStart < 0.3) continue;
-      results.push({
-        start: cutStart,
-        end: cutEnd,
-        confidence: 0.82,
-        reason: "stutter",
-        source: "speechError",
-        detectedBy: "heuristic",
-        text: `(palavra "${w.word}" esticada por ${dur.toFixed(1)}s — provável repetição escondida)`,
-      });
+      if (dur < MIN_WORD_DUR) continue;
+      // Varre bins da waveform dentro do intervalo da palavra e acha o
+      // maior run contínuo de silêncio.
+      let runStart = null;
+      let best = { start: 0, end: 0, dur: 0 };
+      for (const b of waveform) {
+        if (b.end <= w.start) continue;
+        if (b.start >= w.end) break;
+        const bStart = Math.max(b.start, w.start);
+        const bEnd = Math.min(b.end, w.end);
+        if (b.level < SILENCE_LEVEL) {
+          if (runStart == null) runStart = bStart;
+        } else {
+          if (runStart != null) {
+            const runEnd = bStart;
+            const runDur = runEnd - runStart;
+            if (runDur > best.dur) best = { start: runStart, end: runEnd, dur: runDur };
+            runStart = null;
+          }
+        }
+      }
+      if (runStart != null) {
+        const runEnd = w.end;
+        const runDur = runEnd - runStart;
+        if (runDur > best.dur) best = { start: runStart, end: runEnd, dur: runDur };
+      }
+      if (best.dur >= MIN_HIDDEN_SILENCE) {
+        results.push({
+          start: best.start,
+          end: best.end,
+          confidence: 0.88,
+          reason: "silence",
+          source: "speechError",
+          detectedBy: "heuristic",
+          text: `(silêncio de ${best.dur.toFixed(1)}s escondido dentro da palavra "${w.word}")`,
+        });
+      }
     }
   }
 

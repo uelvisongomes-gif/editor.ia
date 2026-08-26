@@ -144,16 +144,39 @@ function collapseTinyKeeps(items) {
     }
     result.push(item);
   }
+  // Caso especial: primeiro item é keep silencioso (sem texto) com dur < 1s,
+  // seguido por remove. Isso é padding inicial (chiado/silêncio antes da
+  // fala) — funde no remove seguinte pra o vídeo começar limpo.
+  if (result.length >= 2) {
+    const first = result[0];
+    const second = result[1];
+    const firstIsSilentPad = first.action === "keep" && !first.text && (first.end - first.start) < 1.0;
+    if (firstIsSilentPad && (second.action === "remove" || second.action === "trim")) {
+      second.start = first.start;
+      result.shift();
+    }
+  }
   return result;
 }
 
 function applySafetyValidators(items, { duration }) {
   if (!items.length) return items;
 
+  // Exceção: hesitação/muleta/stutter no INÍCIO do vídeo é EXATAMENTE o
+  // que a gente quer cortar — o vídeo começa limpo, no conteúdo real.
+  // O "abrupt_open" só se aplica se o corte inicial for conteúdo (repeated
+  // idea, off_topic) ou algo grande demais pra ser considerado só travada.
+  const OPENING_CUT_REASONS_SAFE = new Set(["filler", "stutter", "false_start", "abandoned_phrase", "long_pause", "silence"]);
+  const openingIsHesitation = (it) => OPENING_CUT_REASONS_SAFE.has(it.reason) && (it.end - it.start) <= 4.0;
+
   if (items[0].action !== "keep") {
-    items[0] = { ...items[0], action: "review", safety: "abrupt_open" };
+    if (!openingIsHesitation(items[0])) {
+      items[0] = { ...items[0], action: "review", safety: "abrupt_open" };
+    }
   } else if (items[0].end - items[0].start < MIN_OPENING_KEEP_DUR && items[1]?.action !== "keep") {
-    items[1] = { ...items[1], action: "review", safety: "abrupt_open" };
+    if (!openingIsHesitation(items[1])) {
+      items[1] = { ...items[1], action: "review", safety: "abrupt_open" };
+    }
   }
 
   const last = items[items.length - 1];
