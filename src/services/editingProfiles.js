@@ -26,6 +26,7 @@ export const EDITING_PROFILES = {
     executeThreshold: 0.85,                // technical cuts
     executeThresholdSemantic: 0.92,        // semantic cuts (stricter)
     reviewThreshold: 0.65,
+    detectionThreshold: 0.45,
     // Duration caps: acima destas durações a IA nunca corta automaticamente,
     // mesmo com alta confiança — vira REVIEW. Cortes longos são
     // desproporcionalmente arriscados (removem contexto real).
@@ -46,6 +47,7 @@ export const EDITING_PROFILES = {
     executeThreshold: 0.80,                // technical cuts
     executeThresholdSemantic: 0.88,        // semantic cuts (raised from 0.80)
     reviewThreshold: 0.60,
+    detectionThreshold: 0.45,
     maxTechnicalCutDur: 5.0,
     maxSemanticCutDur: 8.0,
     preserveRoles: ["hook", "cta"],
@@ -63,6 +65,7 @@ export const EDITING_PROFILES = {
     executeThreshold: 0.72,                // technical cuts
     executeThresholdSemantic: 0.82,        // semantic cuts (raised from 0.72)
     reviewThreshold: 0.55,
+    detectionThreshold: 0.40,
     maxTechnicalCutDur: 8.0,
     maxSemanticCutDur: 12.0,
     preserveRoles: ["hook", "cta"],

@@ -33,7 +33,7 @@ Responda APENAS com um array JSON válido, sem markdown, no formato exato:
 [{"startWord":0,"endWord":2,"reason":"stutter","confidence":0.9,"replacementNote":"tentativa correta em ..."}]
 
 - reason ∈ {"stutter","filler","false_start","abandoned_phrase","self_correction"}
-- confidence: >= 0.85 quando evidente, 0.65-0.84 quando claro mas com alguma ambiguidade, < 0.65 quando tiver dúvida real (nesses casos, prefira NÃO marcar).
+- confidence: use TODA A ESCALA de 0.0 a 1.0. Uma confidence baixa (0.4-0.6) NÃO é motivo para omitir — o sistema mostra candidatos suspeitos ao usuário para revisão, mesmo se não vai remover automaticamente. Marcar suspeitas é MELHOR do que perdê-las. Use >= 0.85 quando evidente, 0.65-0.84 quando claro, 0.45-0.64 quando suspeito mas sem certeza. Só omita quando tiver certeza de que NÃO há erro.
 - replacementNote é opcional: quando é uma tentativa errada seguida da versão correta, refira brevemente a versão preservada.
 
 Se não houver nenhum defeito claro, responda [].
@@ -82,6 +82,7 @@ export async function detectSpeechErrors(words, { signal, onUsage } = {}) {
       confidence: Number.isFinite(m.confidence) ? Math.max(0, Math.min(1, Number(m.confidence))) : 0.7,
       reason: typeof m.reason === "string" ? m.reason : "filler",
       source: "speechError",
+      detectedBy: "llm",
       text: words.slice(sw, ew + 1).map((w) => w.word).join(" "),
     };
     if (typeof m.replacementNote === "string" && m.replacementNote.trim()) {

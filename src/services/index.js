@@ -6,6 +6,8 @@ export { analyzeSemantics } from "./semanticAnalysis.js";
 export { buildNarrativeMap } from "./narrativeAnalysis.js";
 export { buildEDL, labelReason, labelSafety, labelContextGuard, REASON_LABELS, SAFETY_LABELS, CONTEXT_GUARD_LABELS } from "./editDecisionList.js";
 export { evaluateContext } from "./contextGuard.js";
+export { collectCandidates, dedupCandidates } from "./candidateAggregator.js";
+export { decideAll, labelBlocked, BLOCKED_LABELS } from "./decisionEngine.js";
 export { compileTimeline } from "./timelineCompilation.js";
 export { EDITING_PROFILES, DEFAULT_PROFILE_ID, getProfile } from "./editingProfiles.js";
 export { runEditingPipeline, PIPELINE_STEPS } from "./pipeline.js";

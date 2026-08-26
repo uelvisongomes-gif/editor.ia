@@ -10,6 +10,7 @@ import {
 import { runEditingPipeline } from "./services/pipeline.js";
 import { EDITING_PROFILES, DEFAULT_PROFILE_ID } from "./services/editingProfiles.js";
 import { EdlReview } from "./components/EdlReview.jsx";
+import { ProblemsFound } from "./components/ProblemsFound.jsx";
 import { createHistory, pushState, undo as undoHistory, redo as redoHistory, canUndo, canRedo } from "./services/edlHistory.js";
 import { createUsageLog, addUsageEntry, summarizeUsage } from "./services/usageLog.js";
 import { buildProjectSnapshot, saveProject, loadProject, listProjects, deleteProject } from "./services/projectRepository.js";
@@ -458,6 +459,7 @@ export default function AiVideoEditor() {
   const [smartStep, setSmartStep] = useState("");
   const [smartError, setSmartError] = useState("");
   const [edl, setEdl] = useState([]);
+  const [problemCandidates, setProblemCandidates] = useState([]);
   const [narrativeTopic, setNarrativeTopic] = useState("");
   const [smartDone, setSmartDone] = useState(false);
   // Toggles the "watch edited version" mode. When true, the player jumps
@@ -553,6 +555,7 @@ export default function AiVideoEditor() {
     setShowingEdited(false);
     setActiveTool("smart");
     setEdl([]);
+    setProblemCandidates([]);
     setNarrativeTopic("");
     setSmartDone(false);
     setSmartError("");
@@ -1063,6 +1066,7 @@ async function callMistakeDetectionAPI(words) {
       setWordTimestamps(result.words);
       setTranscript(result.words.map((w) => w.word).join(" "));
       setEdl(result.edl);
+      setProblemCandidates(result.problemCandidates || []);
       setNarrativeTopic(result.semantic.topic || "");
       setSegments(result.segments);
       // Transições passam a ser tratamento automático da junção: sempre
@@ -1299,6 +1303,60 @@ async function callMistakeDetectionAPI(words) {
   };
 
   const togglePreviewMode = () => setPreviewMode((v) => !v);
+
+  // Ao aceitar/rejeitar um problemCandidate do painel, aplicamos o efeito
+  // na timeline. Se já existe um segment cobrindo o candidato, apenas
+  // toggla deleted/action. Se não existe (o candidato era "detected_only"
+  // ou "dropped" e nunca virou segment), splita a timeline no intervalo.
+  const applyCandidateDecision = (cand, shouldRemove) => {
+    applySegmentsChange((segs) => {
+      // Procura segment que cubra este candidato.
+      const covering = segs.find(
+        (s) => s.start <= cand.start + 0.05 && s.end >= cand.end - 0.05
+      );
+      if (covering && Math.abs(covering.start - cand.start) < 0.05 && Math.abs(covering.end - cand.end) < 0.05) {
+        // Segment bate exatamente — só flipa.
+        return segs.map((s) =>
+          s.id === covering.id
+            ? { ...s, deleted: !!shouldRemove, action: shouldRemove ? "remove" : "keep" }
+            : s
+        );
+      }
+      // Precisa splitar: partir cada segment que intersecta [start, end].
+      const result = [];
+      for (const s of segs) {
+        if (cand.end <= s.start || cand.start >= s.end) { result.push(s); continue; }
+        const points = [s.start, Math.max(s.start, cand.start), Math.min(s.end, cand.end), s.end]
+          .filter((v, i, arr) => i === 0 || v !== arr[i - 1])
+          .sort((a, b) => a - b);
+        for (let i = 0; i < points.length - 1; i++) {
+          const ps = points[i]; const pe = points[i + 1];
+          if (pe - ps < 0.02) continue;
+          const inCut = ps >= cand.start - 0.02 && pe <= cand.end + 0.02;
+          result.push({
+            id: "seg-" + Math.random().toString(36).slice(2, 8),
+            start: ps, end: pe,
+            deleted: inCut ? !!shouldRemove : s.deleted,
+            action: inCut ? (shouldRemove ? "remove" : "keep") : s.action,
+            reason: inCut ? cand.primaryType : s.reason,
+            text: inCut ? cand.text : s.text,
+            confidence: inCut ? cand.confidence : s.confidence,
+            source: inCut ? "manual" : s.source,
+            narrativeRole: s.narrativeRole,
+          });
+        }
+      }
+      return result;
+    }, {
+      label: shouldRemove ? "candidate_remove" : "candidate_keep",
+      aiDecision: cand.finalAction,
+      userDecision: shouldRemove ? "remove" : "keep",
+      reason: cand.primaryType,
+      confidence: cand.confidence,
+      text: cand.text,
+    });
+    showToast(shouldRemove ? "Trecho removido" : "Trecho mantido");
+  };
 
   const runAutoEdit = async () => {
     if (!videoUrl || !duration) return;
@@ -2431,7 +2489,7 @@ async function callMistakeDetectionAPI(words) {
 
             <div className="md:col-span-3 flex flex-col gap-3">
               {(edl.length > 0 || smartBusy) && (
-                <Panel title="Decisões da IA">
+                <Panel title="Problemas encontrados">
                   <div className="flex items-center justify-between mb-3 text-[11px]">
                     <div className="flex items-center gap-1.5">
                       <button
@@ -2516,16 +2574,17 @@ async function callMistakeDetectionAPI(words) {
                       })()}
                     </div>
                   )}
-                  <EdlReview
-                    segments={segments}
-                    topic={narrativeTopic}
-                    onRestore={handleRestoreSegment}
-                    onDelete={handleDeleteSegment}
-                    onSeek={handleSeek}
-                    onConfirmReview={handleConfirmReview}
-                    onNudgeStart={handleNudgeStart}
-                    onNudgeEnd={handleNudgeEnd}
-                    onPlayRange={handlePlayRange}
+                  {narrativeTopic && (
+                    <div style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} className="rounded-lg p-2.5 mb-2">
+                      <p style={{ color: "#9A9AA5" }} className="text-[10px] font-bold uppercase tracking-wide mb-1">Assunto detectado</p>
+                      <p style={{ color: "#F5F5F7" }} className="text-xs leading-snug">{narrativeTopic}</p>
+                    </div>
+                  )}
+                  <ProblemsFound
+                    candidates={problemCandidates}
+                    onPlay={handlePlayRange}
+                    onRemove={(cand) => applyCandidateDecision(cand, true)}
+                    onKeep={(cand) => applyCandidateDecision(cand, false)}
                   />
                 </Panel>
               )}

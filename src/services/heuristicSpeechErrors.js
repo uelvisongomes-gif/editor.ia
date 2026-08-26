@@ -79,6 +79,7 @@ export function detectSpeechErrorsHeuristic(words) {
             confidence: 0.88,
             reason: "stutter",
             source: "speechError",
+      detectedBy: "heuristic",
             text: words.slice(i, j - 1).map((w) => w.word).join(" "),
           });
         }
@@ -114,6 +115,7 @@ export function detectSpeechErrorsHeuristic(words) {
             confidence: 0.7,
             reason: "filler",
             source: "speechError",
+      detectedBy: "heuristic",
             text: words.slice(i, lastFillerIdx + 1).map((w) => w.word).join(" "),
           });
           i = lastFillerIdx + 1;
@@ -154,6 +156,7 @@ export function detectSpeechErrorsHeuristic(words) {
           confidence: 0.85,
           reason: "abandoned_phrase",
           source: "speechError",
+      detectedBy: "heuristic",
           text: words.slice(sentStart, i + marker.length).map((w) => w.word).join(" "),
         });
       }
@@ -189,6 +192,7 @@ export function detectSpeechErrorsHeuristic(words) {
       confidence,
       reason: "filler",
       source: "speechError",
+      detectedBy: "heuristic",
       text: w.word,
     });
   }
@@ -234,6 +238,7 @@ export function detectSpeechErrorsHeuristic(words) {
         confidence: 0.85,
         reason: "false_start",
         source: "speechError",
+      detectedBy: "heuristic",
         text: words.slice(a.startIdx, a.endIdx + 1).map((w) => w.word).join(" "),
       });
       s += 1; // pula a segunda pra não re-analisar

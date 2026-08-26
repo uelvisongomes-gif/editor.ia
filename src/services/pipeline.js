@@ -104,12 +104,13 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
 
   throwIfAborted(signal);
   step("edl");
-  const edl = buildEDL({ duration, words, semantic, silences, speechErrors, profile });
+  const { edl, problemCandidates } = buildEDL({ duration, words, semantic, silences, speechErrors, profile });
+  console.log("[pipeline] problemCandidates:", problemCandidates.length, problemCandidates);
 
   step("compile");
   const segments = compileTimeline(edl);
 
-  return { words, waveform, semantic, narrative, edl, segments, profile };
+  return { words, waveform, semantic, narrative, edl, segments, profile, problemCandidates };
 }
 
 export { STEPS as PIPELINE_STEPS };
