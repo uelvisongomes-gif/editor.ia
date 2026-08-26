@@ -37,7 +37,7 @@ export const EDITING_PROFILES = {
     zoomTargetPer30s: 1.5,
     zoomMaxEvents: 6,
     zoomMinGapSec: 10,
-    zoomFadeSec: 0.4,
+    zoomFadeSec: 0.15,
   },
   equilibrada: {
     id: "equilibrada",
@@ -60,7 +60,7 @@ export const EDITING_PROFILES = {
     zoomTargetPer30s: 3.5,
     zoomMaxEvents: 14,
     zoomMinGapSec: 6,
-    zoomFadeSec: 0.4,
+    zoomFadeSec: 0.15,
   },
   agressiva: {
     id: "agressiva",
@@ -82,7 +82,7 @@ export const EDITING_PROFILES = {
     zoomTargetPer30s: 5,
     zoomMaxEvents: 20,
     zoomMinGapSec: 4,
-    zoomFadeSec: 0.35,
+    zoomFadeSec: 0.12,
   },
 };
 

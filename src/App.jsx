@@ -88,30 +88,30 @@ const CAPTION_STYLES = [
   // ====== Estilos premium (top de linha) ======
   {
     id: "tiktok", label: "TikTok Bold",
-    textColor: "#FFFFFF", strokeColor: "#000000", strokeWidth: 12,
+    textColor: "#FFFFFF", strokeColor: "#000000", strokeWidth: 10,
     bg: null, position: "middle-bottom", uppercase: true, weight: 900,
-    sizeScale: 1.35, fontFamily: "'Inter', 'Arial Black', sans-serif",
+    sizeScale: 1.05, fontFamily: "'Inter', 'Arial Black', sans-serif",
     shadow: { color: "rgba(0,0,0,0.6)", blur: 8, offsetY: 4 },
   },
   {
     id: "mrbeast", label: "MrBeast Gold",
     textColor: "#FFD400", strokeColor: "#000000", strokeWidth: 14,
     bg: null, position: "middle-bottom", uppercase: true, weight: 900,
-    sizeScale: 1.5, fontFamily: "'Impact', 'Arial Black', sans-serif",
+    sizeScale: 1.15, fontFamily: "'Impact', 'Arial Black', sans-serif",
     shadow: { color: "rgba(0,0,0,0.8)", blur: 12, offsetY: 6 },
   },
   {
     id: "neon", label: "Neon Cyber",
     textColor: "#00FFF0", strokeColor: "#000000", strokeWidth: 8,
     bg: null, position: "middle-bottom", uppercase: true, weight: 900,
-    sizeScale: 1.3, fontFamily: "'Inter', 'Arial Black', sans-serif",
+    sizeScale: 1.05, fontFamily: "'Inter', 'Arial Black', sans-serif",
     shadow: { color: "#00FFF0", blur: 24, offsetY: 0 },
   },
   {
     id: "karaoke", label: "Karaokê (palavra por palavra)",
     textColor: "#FFFFFF", highlightColor: "#FFEB3B", strokeColor: "#000000",
-    strokeWidth: 10, bg: null, position: "middle-bottom", uppercase: true,
-    weight: 900, sizeScale: 1.35, fontFamily: "'Inter', 'Arial Black', sans-serif",
+    strokeWidth: 9, bg: null, position: "middle-bottom", uppercase: true,
+    weight: 900, sizeScale: 1.05, fontFamily: "'Inter', 'Arial Black', sans-serif",
     shadow: { color: "rgba(0,0,0,0.7)", blur: 8, offsetY: 4 },
     perWord: true,
   },
@@ -131,9 +131,9 @@ const CAPTION_STYLES = [
   },
   {
     id: "pop", label: "Pop Pink",
-    textColor: "#FF3EA5", strokeColor: "#FFFFFF", strokeWidth: 10,
+    textColor: "#FF3EA5", strokeColor: "#FFFFFF", strokeWidth: 9,
     bg: null, position: "middle-bottom", uppercase: true, weight: 900,
-    sizeScale: 1.3, fontFamily: "'Inter', 'Arial Black', sans-serif",
+    sizeScale: 1.05, fontFamily: "'Inter', 'Arial Black', sans-serif",
     shadow: { color: "rgba(0,0,0,0.55)", blur: 10, offsetY: 4 },
   },
   // ====== Estilos básicos (mantidos por compatibilidade) ======
@@ -146,20 +146,36 @@ const CAPTION_STYLES = [
 
 const CAPTION_Y_FRACTION = { bottom: 0.93, "middle-bottom": 0.78, top: 0.12, center: 0.5 };
 
-const TRANSITION_DURATION = 0.25; // seconds each fade takes
+const TRANSITION_DURATION = 0.08; // 80ms — quase imperceptível, evita "escurecer" no zoom-cut
 
 function wrapTextByWidth(ctx, text, maxWidth) {
   const words = text.split(/\s+/).filter(Boolean);
+  const totalWidth = ctx.measureText(text).width;
+  // Cabe numa linha? Retorna direto.
+  if (totalWidth <= maxWidth) return [text];
+  // Quebra em 2 linhas balanceadas — evita "1 palavra por linha".
+  const targetLines = Math.min(3, Math.max(2, Math.ceil(totalWidth / maxWidth)));
+  const target = totalWidth / targetLines;
   const lines = [];
   let cur = "";
-  for (const w of words) {
-    const trial = cur ? cur + " " + w : w;
-    const m = ctx.measureText(trial);
-    if (m.width <= maxWidth) {
-      cur = trial;
-    } else {
-      if (cur) lines.push(cur);
+  let curWidth = 0;
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    const wSpace = cur ? " " + w : w;
+    const wWidth = ctx.measureText(wSpace).width;
+    const nextWidth = curWidth + wWidth;
+    // Fecha linha quando: passou do alvo E ainda tem palavras pra
+    // preencher próxima linha; OU não cabe em maxWidth.
+    const remainingWords = words.length - i - 1;
+    const shouldBreak = (nextWidth > maxWidth && cur) ||
+                        (nextWidth >= target && cur && remainingWords >= 1 && lines.length < targetLines - 1);
+    if (shouldBreak) {
+      lines.push(cur);
       cur = w;
+      curWidth = ctx.measureText(w).width;
+    } else {
+      cur = cur ? cur + " " + w : w;
+      curWidth = nextWidth;
     }
   }
   if (cur) lines.push(cur);
@@ -193,7 +209,7 @@ function drawFrame(ctx, video, canvas, colorAdjust, captions, t, zoomScale = 1, 
   ctx.font = `${captionStyle.weight} ${fontSize}px ${fontFamily}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const maxWidth = canvas.width * 0.86;
+  const maxWidth = canvas.width * 0.94;
   const yFrac = CAPTION_Y_FRACTION[captionStyle.position] ?? 0.93;
   const centerY = canvas.height * yFrac;
 
