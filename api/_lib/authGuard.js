@@ -22,9 +22,9 @@ function adapter() {
 // Cotas por plano — números conservadores pra começar. Ajuste na conta
 // Supabase depois se quiser, o adapter lê daqui como fonte da verdade.
 const PLAN_LIMITS = {
-  free:    { transcriptionMinutes: 5,   llmCalls: 30,   exports: 2   },
-  starter: { transcriptionMinutes: 60,  llmCalls: 300,  exports: 20  },
-  pro:     { transcriptionMinutes: 600, llmCalls: 3000, exports: 200 },
+  free:    { transcriptionMinutes: 120, llmCalls: 500,  exports: 20  },
+  starter: { transcriptionMinutes: 300, llmCalls: 1500, exports: 60  },
+  pro:     { transcriptionMinutes: 900, llmCalls: 4500, exports: 300 },
   unlimited: { transcriptionMinutes: Infinity, llmCalls: Infinity, exports: Infinity },
 };
 
