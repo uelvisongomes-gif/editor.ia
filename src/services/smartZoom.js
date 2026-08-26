@@ -14,13 +14,32 @@
 let _id = 1;
 const nextId = () => "zoom-" + _id++;
 
-// Níveis centralizados — se quiser ajustar visual global, mexe aqui.
+// Níveis centralizados — perceptíveis a olho nu. Ajuste aqui pra
+// mudar o visual global.
 export const ZOOM_LEVELS = {
-  light:  { min: 1.05, max: 1.08 },
-  medium: { min: 1.08, max: 1.13 },
-  strong: { min: 1.13, max: 1.20 },
-  out:    { min: 0.94, max: 0.97 },
+  light:  { value: 1.08, label: "Suave" },
+  medium: { value: 1.14, label: "Moderado" },
+  strong: { value: 1.22, label: "Forte" },
+  // Zoom out — valores REPRESENTAM saída da imagem. O renderer converte
+  // para escalas efetivas usando o BASE_ZOOM (ver base_zoom abaixo) pra
+  // evitar borda preta.
+  out_light:  { value: 0.96, label: "Suave" },
+  out_medium: { value: 0.92, label: "Moderado" },
+  out_strong: { value: 0.88, label: "Forte" },
 };
+
+// BASE_ZOOM: o preview começa levemente ampliado (~1.10). Isso garante
+// que zoom_out (scale < 1) NÃO revele bordas pretas — o valor efetivo
+// aplicado no vídeo é sempre >= 1.
+export const BASE_ZOOM = 1.10;
+
+// Converte scale conceitual em scale efetiva (aplicada no video preview).
+// zoom_in 1.14 → 1.14 * 1.10 = 1.254
+// zoom_out 0.92 → 0.92 * 1.10 = 1.012 (ainda >= 1, sem borda)
+export function effectiveScale(conceptualScale) {
+  const eff = (conceptualScale || 1) * BASE_ZOOM;
+  return Math.max(1.0, eff);
+}
 
 const ROLE_WEIGHT = {
   point: 1.0,
@@ -81,9 +100,8 @@ function pickLevel(sentence, score) {
 }
 
 function pickScale(level) {
-  const range = ZOOM_LEVELS[level] || ZOOM_LEVELS.light;
-  // Meio da faixa — determinístico pra o mesmo vídeo dar o mesmo zoom.
-  return +((range.min + range.max) / 2).toFixed(3);
+  const spec = ZOOM_LEVELS[level] || ZOOM_LEVELS.light;
+  return spec.value;
 }
 
 // Detecta se depois de uma sentença de impacto há uma "transição" — vale
@@ -103,7 +121,8 @@ function isTransitionAfter(currentSentence, nextSentence) {
  */
 export function computeZoomEvents({ semantic, segments, profile }) {
   const sentences = semantic?.sentences || [];
-  if (!sentences.length) return [];
+  // Nota: NÃO retorna cedo quando não há sentenças — ainda podemos ter
+  // zoom de transição pra cada cut point.
   const zoomsPerMinute = (profile.zoomTargetPer30s ?? 3) * 2; // dobra pra minuto
   const fade = profile.zoomFadeSec ?? 0.4;
   const minGap = profile.zoomMinGapSec ?? 6;
@@ -171,7 +190,7 @@ export function computeZoomEvents({ semantic, segments, profile }) {
       const outStart = end + 0.15;
       const outEnd = Math.min(nextSentence.end - 0.1, outStart + 1.6);
       if (outEnd > outStart + 0.4 && inActiveSegment(outStart)) {
-        const outScale = pickScale("out");
+        const outScale = pickScale("out_light");
         events.push({
           id: nextId(),
           type: "zoom",
@@ -186,6 +205,40 @@ export function computeZoomEvents({ semantic, segments, profile }) {
           text: nextSentence.text,
         });
       }
+    }
+  }
+
+  // TRANSITION PUNCH: em cada ponto de corte (junção entre dois segments
+  // ativos), aplica um zoom in leve curto (~0.7s) que funciona como
+  // transição visual — evita o corte parecer seco. Não conflita com
+  // zooms grandes: se já existe zoom começando dentro de 1.5s do ponto,
+  // pula.
+  if (segments?.length && (profile.zoomTransitionOnCuts ?? true)) {
+    const activeSegs = segments.filter((s) => !s.deleted && s.action !== "review").sort((a, b) => a.start - b.start);
+    for (let i = 1; i < activeSegs.length; i++) {
+      const cutPoint = activeSegs[i].start;
+      // Só se o segment tem duração pra caber o punch.
+      if (activeSegs[i].end - cutPoint < 1.0) continue;
+      // Evita colidir com zoom grande já planejado.
+      const conflict = events.find((e) => Math.abs(e.start - cutPoint) < 1.5);
+      if (conflict) continue;
+      const punchScale = ZOOM_LEVELS.light.value;
+      events.push({
+        id: nextId(),
+        type: "zoom",
+        mode: "zoom_in",
+        start: cutPoint,
+        end: cutPoint + 0.7,
+        scale: punchScale,
+        fadeIn: 0.2,
+        fadeOut: 0.25,
+        reason: "cut_transition",
+        level: "light",
+        confidence: 1.0,
+        sentenceIndex: null,
+        text: "",
+        isTransition: true,
+      });
     }
   }
 

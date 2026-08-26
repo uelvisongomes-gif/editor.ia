@@ -15,7 +15,7 @@ import { createHistory, pushState, undo as undoHistory, redo as redoHistory, can
 import { createUsageLog, addUsageEntry, summarizeUsage } from "./services/usageLog.js";
 import { buildProjectSnapshot, saveProject, loadProject, listProjects, deleteProject } from "./services/projectRepository.js";
 import { stampsForProject } from "./services/pipelineVersion.js";
-import { scaleAt as computeSmartZoomScale } from "./services/smartZoom.js";
+import { scaleAt as computeSmartZoomScale, ZOOM_LEVELS, BASE_ZOOM, effectiveScale } from "./services/smartZoom.js";
 
 let idCounter = 1;
 const genId = () => "seg-" + idCounter++;
@@ -461,8 +461,16 @@ export default function AiVideoEditor() {
   const [problemCandidates, setProblemCandidates] = useState([]);
   const [narrativeTopic, setNarrativeTopic] = useState("");
   const [zoomEvents, setZoomEvents] = useState([]);
+  // Seleção de zoom para edição (excluir/redimensionar/mover/nível).
+  const [selectedZoomId, setSelectedZoomId] = useState(null);
+  // Ref pra drag state
+  const zoomDragRef = useRef(null);
   // Toggle "Zoom automático" na Edição Inteligente. Padrão ON.
   const [smartZoomEnabled, setSmartZoomEnabled] = useState(true);
+  // Legendas automáticas
+  const [autoCaptionsEnabled, setAutoCaptionsEnabled] = useState(false);
+  const [captionStylePreset, setCaptionStylePreset] = useState("classic");
+  const [captionPosition, setCaptionPosition] = useState("bottom");
   // Debug panel só aparece com ?debug=1 na URL.
   const debugMode = typeof window !== "undefined" && window.location.search.includes("debug=1");
   // --- Diagnóstico forense ---
@@ -675,9 +683,15 @@ export default function AiVideoEditor() {
       }
     }
     // Prioridade 1: smartZoom (novo, do pipeline). Fallback: zoom legado.
+    // Quando smartZoom está ligado, o preview roda com BASE_ZOOM constante
+    // (~1.10) pra zoom_out (<1.0) não revelar bordas pretas.
     if (smartZoomEnabled && zoomEvents.length) {
-      const s = computeSmartZoomScale(zoomEvents, t);
-      if (s !== zoomScale) setZoomScale(s);
+      const conceptual = computeSmartZoomScale(zoomEvents, t);
+      const s = effectiveScale(conceptual);
+      if (Math.abs(s - zoomScale) > 0.001) setZoomScale(s);
+    } else if (smartZoomEnabled) {
+      // Sem eventos ativos ainda mantém BASE_ZOOM pra continuidade.
+      if (Math.abs(BASE_ZOOM - zoomScale) > 0.001) setZoomScale(BASE_ZOOM);
     } else if (zoomEnabled) {
       setZoomScale(computeZoomScale(t, zoomEnabled, zoomIntensity, zoomCues));
     } else if (zoomScale !== 1) {
@@ -1083,6 +1097,11 @@ async function callMistakeDetectionAPI(words) {
       setProblemCandidates(result.problemCandidates || []);
       setZoomEvents(result.zoomEvents || []);
       setNarrativeTopic(result.semantic.topic || "");
+      // Se legendas automáticas ligadas, gera direto do word timestamps
+      // sem call LLM extra.
+      if (autoCaptionsEnabled && result.words?.length) {
+        setCaptions(buildCaptionsFromWords(result.words, 7));
+      }
       setSegments(result.segments);
       // Transições passam a ser tratamento automático da junção: sempre
       // que a IA gera cortes, ligamos o fade curto no ponto de cada corte.
@@ -1148,10 +1167,13 @@ async function callMistakeDetectionAPI(words) {
       const key = e.key.toLowerCase();
       if (key === "z" && !e.shiftKey) {
         e.preventDefault();
-        doUndo();
+        // Se há operação de zoom mais recente na pilha, desfaz zoom primeiro.
+        if (zoomHistoryRef.current.length > 0) undoZoom();
+        else doUndo();
       } else if ((key === "y") || (key === "z" && e.shiftKey)) {
         e.preventDefault();
-        doRedo();
+        if (zoomFutureRef.current.length > 0) redoZoom();
+        else doRedo();
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -1320,6 +1342,104 @@ async function callMistakeDetectionAPI(words) {
   };
 
   const togglePreviewMode = () => setPreviewMode((v) => !v);
+
+  // ==================== ZOOM EDITING ====================
+  // Registra mudança de zoomEvents no history da mesma pilha da EDL —
+  // guardamos o snapshot antes e adicionamos ao autosave via debounce.
+  const zoomHistoryRef = useRef([]);
+  const zoomFutureRef = useRef([]);
+  const pushZoomHistory = (before) => {
+    zoomHistoryRef.current.push(before);
+    if (zoomHistoryRef.current.length > 100) zoomHistoryRef.current.shift();
+    zoomFutureRef.current = [];
+  };
+  const undoZoom = () => {
+    if (!zoomHistoryRef.current.length) return false;
+    const prev = zoomHistoryRef.current.pop();
+    zoomFutureRef.current.push([...zoomEvents]);
+    setZoomEvents(prev);
+    showToast("Zoom desfeito");
+    return true;
+  };
+  const redoZoom = () => {
+    if (!zoomFutureRef.current.length) return false;
+    const next = zoomFutureRef.current.pop();
+    zoomHistoryRef.current.push([...zoomEvents]);
+    setZoomEvents(next);
+    showToast("Zoom refeito");
+    return true;
+  };
+
+  const updateZoomEvent = (id, patch) => {
+    pushZoomHistory([...zoomEvents]);
+    setZoomEvents((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  };
+  const deleteZoomEvent = (id) => {
+    pushZoomHistory([...zoomEvents]);
+    setZoomEvents((prev) => prev.filter((e) => e.id !== id));
+    setSelectedZoomId(null);
+    showToast("Zoom removido");
+  };
+  const setZoomLevel = (id, levelKey) => {
+    const spec = ZOOM_LEVELS[levelKey];
+    if (!spec) return;
+    const mode = levelKey.startsWith("out") ? "zoom_out" : "zoom_in";
+    updateZoomEvent(id, { scale: spec.value, level: levelKey, mode });
+  };
+
+  // Drag handlers — precisam do container da timeline pra converter px→segundos.
+  const startZoomDrag = (e, evId, mode) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!timelineRef.current || !duration) return;
+    const rect = timelineRef.current.getBoundingClientRect();
+    const gutter = 46;
+    const usableWidth = rect.width - gutter;
+    const secPerPx = duration / usableWidth;
+    const target = zoomEvents.find((z) => z.id === evId);
+    if (!target) return;
+    // Snapshot antes da drag inteira — undo volta pra ANTES da drag.
+    pushZoomHistory([...zoomEvents]);
+    zoomDragRef.current = {
+      id: evId,
+      mode, // "move" | "resize-left" | "resize-right"
+      startX: e.clientX,
+      origStart: target.start,
+      origEnd: target.end,
+      secPerPx,
+    };
+    const onMove = (ev) => {
+      const d = zoomDragRef.current; if (!d) return;
+      const dx = ev.clientX - d.startX;
+      const dt = dx * d.secPerPx;
+      setZoomEvents((prev) => prev.map((z) => {
+        if (z.id !== d.id) return z;
+        if (d.mode === "move") {
+          let ns = d.origStart + dt;
+          let ne = d.origEnd + dt;
+          if (ns < 0) { ne -= ns; ns = 0; }
+          if (ne > duration) { ns -= (ne - duration); ne = duration; }
+          return { ...z, start: ns, end: ne };
+        }
+        if (d.mode === "resize-left") {
+          const ns = Math.max(0, Math.min(z.end - 0.3, d.origStart + dt));
+          return { ...z, start: ns };
+        }
+        if (d.mode === "resize-right") {
+          const ne = Math.min(duration, Math.max(z.start + 0.3, d.origEnd + dt));
+          return { ...z, end: ne };
+        }
+        return z;
+      }));
+    };
+    const onUp = () => {
+      zoomDragRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
 
   // --- Diagnóstico: marcar erro não detectado ---
   const markMissedStart = () => {
@@ -1847,7 +1967,7 @@ async function callMistakeDetectionAPI(words) {
                     })}
                   </div>
 
-                  <label className="flex items-center justify-between mb-3 cursor-pointer" style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} onClick={(e) => e.stopPropagation()}>
+                  <label className="flex items-center justify-between mb-2 cursor-pointer" style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} onClick={(e) => e.stopPropagation()}>
                     <span className="text-[11px] px-2 py-1.5" style={{ color: "#C9C9D1" }}>Zoom automático</span>
                     <span className="pr-2">
                       <input
@@ -1857,6 +1977,71 @@ async function callMistakeDetectionAPI(words) {
                       />
                     </span>
                   </label>
+                  <label className="flex items-center justify-between mb-3 cursor-pointer" style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} onClick={(e) => e.stopPropagation()}>
+                    <span className="text-[11px] px-2 py-1.5" style={{ color: "#C9C9D1" }}>Legendas automáticas</span>
+                    <span className="pr-2">
+                      <input
+                        type="checkbox"
+                        checked={autoCaptionsEnabled}
+                        onChange={(e) => {
+                          setAutoCaptionsEnabled(e.target.checked);
+                          // Se ligando agora e já temos words, gera na hora.
+                          if (e.target.checked && wordTimestamps.length) {
+                            setCaptions(buildCaptionsFromWords(wordTimestamps, 7));
+                          } else if (!e.target.checked) {
+                            setCaptions([]);
+                          }
+                        }}
+                      />
+                    </span>
+                  </label>
+
+                  {autoCaptionsEnabled && (
+                    <div className="mb-3">
+                      <p style={{ color: "#6B6B75" }} className="text-[10px] font-bold uppercase tracking-wide mb-1.5">Estilo da legenda</p>
+                      <div className="grid grid-cols-2 gap-1.5 mb-2">
+                        {CAPTION_STYLES.map((s) => {
+                          const active = captionStylePreset === s.id;
+                          return (
+                            <button
+                              key={s.id}
+                              onClick={() => { setCaptionStylePreset(s.id); setCaptionStyleId(s.id); }}
+                              style={{ background: active ? "#2A1B10" : "#0F0F13", border: active ? "1px solid #FF6A2B" : "1px solid #1F1F26" }}
+                              className="text-left p-1.5 rounded-lg"
+                            >
+                              <div className="flex items-center justify-center h-8 mb-1" style={{ background: "#000", borderRadius: 3 }}>
+                                <span
+                                  style={{
+                                    background: s.bg || "transparent",
+                                    color: s.textColor,
+                                    fontWeight: s.weight,
+                                    fontSize: 9,
+                                    textTransform: s.uppercase ? "uppercase" : "none",
+                                    padding: s.bg ? "1px 5px" : 0,
+                                    borderRadius: 2,
+                                    WebkitTextStroke: s.strokeColor ? `0.7px ${s.strokeColor}` : undefined,
+                                  }}
+                                >
+                                  Exemplo
+                                </span>
+                              </div>
+                              <span className="block text-[10px] text-center" style={{ color: active ? "#FF6A2B" : "#C9C9D1" }}>{s.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-1 mb-1">
+                        <span style={{ color: "#6B6B75" }} className="text-[10px]">Posição:</span>
+                        {[["bottom", "Inferior"], ["middle-bottom", "Centro-baixo"], ["top", "Topo"]].map(([id, label]) => (
+                          <button key={id} onClick={() => setCaptionPosition(id)}
+                            style={{ background: captionPosition === id ? "#FF6A2B" : "#1B1B21", color: captionPosition === id ? "#1A0A02" : "#C9C9D1" }}
+                            className="text-[10px] px-2 py-0.5 rounded font-semibold">
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <button
                     onClick={runIntelligentEdit}
@@ -2519,25 +2704,47 @@ async function callMistakeDetectionAPI(words) {
                       <TrackLabel text="Zoom" />
                       <div className="absolute inset-0" style={{ paddingLeft: 46 }}>
                         <div className="relative w-full h-full">
-                          {smartZoomEnabled && zoomEvents.map((ev) => (
-                            <div
-                              key={ev.id}
-                              title={`Zoom In · ${ev.reason} · ${ev.start.toFixed(1)}-${ev.end.toFixed(1)}s · "${ev.text?.slice(0, 60) || ""}"`}
-                              onClick={(e) => { e.stopPropagation(); handlePlayRange(ev.start - 0.3, ev.end + 0.3); }}
-                              style={{
-                                position: "absolute",
-                                left: `${(ev.start / duration) * 100}%`,
-                                width: `${Math.max(0.5, ((ev.end - ev.start) / duration) * 100)}%`,
-                                top: 2, bottom: 2,
-                                background: "linear-gradient(90deg,#5DCAA5,#3E9B7A)",
-                                borderRadius: 3,
-                                cursor: "pointer",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                              }}
-                            >
-                              <ZoomIn size={9} color="#0A140D" />
-                            </div>
-                          ))}
+                          {smartZoomEnabled && zoomEvents.map((ev) => {
+                            const isOut = ev.mode === "zoom_out";
+                            const isSelected = selectedZoomId === ev.id;
+                            const levelSpec = ZOOM_LEVELS[ev.level] || {};
+                            const label = levelSpec.label ? levelSpec.label[0] : "";
+                            return (
+                              <div
+                                key={ev.id}
+                                title={`${isOut ? "Zoom Out" : "Zoom In"} · ${levelSpec.label || ""} · ${ev.reason}`}
+                                onClick={(e) => { e.stopPropagation(); setSelectedZoomId(ev.id); }}
+                                onMouseDown={(e) => { if (e.button === 0) startZoomDrag(e, ev.id, "move"); }}
+                                style={{
+                                  position: "absolute",
+                                  left: `${(ev.start / duration) * 100}%`,
+                                  width: `${Math.max(1.2, ((ev.end - ev.start) / duration) * 100)}%`,
+                                  top: 1, bottom: 1,
+                                  background: isOut
+                                    ? "linear-gradient(90deg,#78BAFF,#4E85C7)"
+                                    : "linear-gradient(90deg,#5DCAA5,#3E9B7A)",
+                                  borderRadius: 3,
+                                  cursor: "grab",
+                                  border: isSelected ? "2px solid #FFFFFF" : "1px solid rgba(0,0,0,0.3)",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  color: "#0A140D",
+                                  fontSize: 10, fontWeight: 800,
+                                  userSelect: "none",
+                                }}
+                              >
+                                {/* Resize handles */}
+                                <div
+                                  onMouseDown={(e) => startZoomDrag(e, ev.id, "resize-left")}
+                                  style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 5, cursor: "ew-resize" }}
+                                />
+                                <div
+                                  onMouseDown={(e) => startZoomDrag(e, ev.id, "resize-right")}
+                                  style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 5, cursor: "ew-resize" }}
+                                />
+                                {isOut ? "OUT" : "IN"}{label && ` · ${label}`}
+                              </div>
+                            );
+                          })}
                           {/* legado */}
                           {!smartZoomEnabled && zoomEnabled && zoomCues && zoomCues.map((t, i) => (
                             <div key={i} title="Zoom (legado)" style={{
@@ -2629,6 +2836,51 @@ async function callMistakeDetectionAPI(words) {
                       >
                         {seg.deleted ? <><Undo2 size={12} /> Restaurar trecho</> : <><Trash2 size={12} /> Remover trecho</>}
                       </button>
+                    </div>
+                  );
+                })()}
+
+                {selectedZoomId && (() => {
+                  const ev = zoomEvents.find((z) => z.id === selectedZoomId);
+                  if (!ev) return null;
+                  const isOut = ev.mode === "zoom_out";
+                  const inLevels = ["light", "medium", "strong"];
+                  const outLevels = ["out_light", "out_medium", "out_strong"];
+                  return (
+                    <div className="mt-2 pt-2" style={{ borderTop: "1px solid #1F1F26" }}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span style={{ color: "#F5F5F7" }} className="text-xs font-semibold">
+                          {isOut ? "Zoom Out" : "Zoom In"} · {formatTime(ev.start)} → {formatTime(ev.end)} ({(ev.end - ev.start).toFixed(1)}s)
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handlePlayRange(ev.start - 0.2, ev.end + 0.2)} style={{ background: "#1B1B21", color: "#C9C9D1" }} className="flex items-center gap-1 px-2 py-1 rounded text-[10px]">
+                            <Play size={10} /> Ouvir
+                          </button>
+                          <button onClick={() => deleteZoomEvent(ev.id)} style={{ background: "#5A2A1E", color: "#FFB0A0" }} className="flex items-center gap-1 px-2 py-1 rounded text-[10px]">
+                            <Trash2 size={10} /> Excluir
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span style={{ color: "#6B6B75" }} className="text-[10px]">Intensidade:</span>
+                        {(isOut ? outLevels : inLevels).map((lv) => {
+                          const spec = ZOOM_LEVELS[lv];
+                          const active = ev.level === lv;
+                          return (
+                            <button key={lv} onClick={() => setZoomLevel(ev.id, lv)}
+                              style={{ background: active ? "#FF6A2B" : "#1B1B21", color: active ? "#1A0A02" : "#C9C9D1" }}
+                              className="text-[10px] px-2 py-0.5 rounded font-semibold">
+                              {spec.label}
+                            </button>
+                          );
+                        })}
+                        <button
+                          onClick={() => updateZoomEvent(ev.id, isOut ? { mode: "zoom_in", scale: ZOOM_LEVELS.medium.value, level: "medium" } : { mode: "zoom_out", scale: ZOOM_LEVELS.out_light.value, level: "out_light" })}
+                          style={{ background: "#1B1B21", color: "#78BAFF" }}
+                          className="text-[10px] px-2 py-0.5 rounded font-semibold ml-2">
+                          Trocar para {isOut ? "Zoom In" : "Zoom Out"}
+                        </button>
+                      </div>
                     </div>
                   );
                 })()}
