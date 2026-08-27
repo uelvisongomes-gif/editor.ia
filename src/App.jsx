@@ -1617,14 +1617,12 @@ async function callMistakeDetectionAPI(words) {
       setIntegrityReport(result.integrity || null);
       setDebugTimelineReport(result.debugReport || null);
       setNarrativeTopic(result.semantic.topic || "");
-      // Auto-color: se usuário ainda não mexeu na cor manualmente,
-      // aplica um leve boost pra dar visual "social ready" (Reels/TikTok).
-      // Se já mexeu, respeita a preferência.
-      setColorAdjust((c) => {
-        const untouched = c.brightness === 100 && c.contrast === 100 && c.saturate === 100;
-        if (!untouched) return c;
-        return { brightness: 104, contrast: 110, saturate: 114 };
-      });
+      // Auto-color: aplica SEMPRE após analise, boost "social ready"
+      // (Reels/TikTok). Referência do usuário: "levemente mais claro,
+      // mas não demais". Ajuste conservador — se quiser mudar, mexe
+      // nos sliders manualmente que sobrescreve.
+      setColorAdjust({ brightness: 108, contrast: 112, saturate: 116 });
+      showToast("Cor ajustada automaticamente");
       // Se legendas automáticas ligadas, gera direto do word timestamps
       // sem call LLM extra.
       if (autoCaptionsEnabled && result.words?.length) {
