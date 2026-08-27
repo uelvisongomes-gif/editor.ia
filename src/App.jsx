@@ -12,6 +12,8 @@ import { EDITING_PROFILES, DEFAULT_PROFILE_ID } from "./services/editingProfiles
 import { EdlReview } from "./components/EdlReview.jsx";
 import { ProblemsFound } from "./components/ProblemsFound.jsx";
 import { IntegrityAndTimelineDebug } from "./components/IntegrityAndTimelineDebug.jsx";
+import { MusicLibrary } from "./components/MusicLibrary.jsx";
+import { getMusicById } from "./services/musicCatalog.js";
 import { AuthGate } from "./components/AuthGate.jsx";
 import { createHistory, pushState, undo as undoHistory, redo as redoHistory, canUndo, canRedo } from "./services/edlHistory.js";
 import { createUsageLog, addUsageEntry, summarizeUsage } from "./services/usageLog.js";
@@ -847,7 +849,8 @@ function computeCoverDraw(srcW, srcH, dstW, dstH) {
 const TOOLS = [
   { id: "smart", label: "Edição inteligente", icon: Brain, desc: "IA edita seu vídeo automaticamente" },
   { id: "color", label: "Correção de cor", icon: Palette, desc: "Brilho, contraste, saturação" },
-  { id: "volume", label: "Volume", icon: Volume2, desc: "Ajusta o volume do vídeo" },
+  { id: "music", label: "Música", icon: Volume2, desc: "Biblioteca de trilhas" },
+  { id: "volume", label: "Volume", icon: Volume2, desc: "Fala, música e ambiente" },
 ];
 
 export default function AiVideoEditor() {
@@ -902,7 +905,12 @@ export default function AiVideoEditor() {
   const [previewOpacity, setPreviewOpacity] = useState(1);
 
   const [colorAdjust, setColorAdjust] = useState({ brightness: 100, contrast: 100, saturate: 100 });
-  const [volume, setVolume] = useState(1);
+  // Volumes independentes por track. `volume` fica como "fala" (do vídeo).
+  const [volume, setVolume] = useState(1);              // fala (áudio do vídeo)
+  const [musicVolume, setMusicVolume] = useState(0.35); // música de fundo
+  const [ambientVolume, setAmbientVolume] = useState(0.20); // ambiente/ruído
+  const [selectedMusicId, setSelectedMusicId] = useState(null);
+  const musicAudioRef = useRef(null);
 
   const [videoTypeId, setVideoTypeId] = useState("vendas");
   const [platformIds, setPlatformIds] = useState(["tiktok"]);
@@ -1001,6 +1009,22 @@ export default function AiVideoEditor() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Música: sincroniza com play/pause do vídeo + aplica volume.
+  useEffect(() => {
+    const audio = musicAudioRef.current;
+    if (!audio) return;
+    const track = selectedMusicId ? getMusicById(selectedMusicId) : null;
+    if (!track) { audio.pause(); audio.src = ""; return; }
+    if (audio.src !== track.url) audio.src = track.url;
+    audio.volume = musicVolume;
+    audio.loop = true;
+    if (isPlaying) {
+      audio.play().catch(() => {});
+    } else {
+      audio.pause();
+    }
+  }, [selectedMusicId, musicVolume, isPlaying]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.volume = volume;
@@ -1578,6 +1602,14 @@ async function callMistakeDetectionAPI(words) {
       setIntegrityReport(result.integrity || null);
       setDebugTimelineReport(result.debugReport || null);
       setNarrativeTopic(result.semantic.topic || "");
+      // Auto-color: se usuário ainda não mexeu na cor manualmente,
+      // aplica um leve boost pra dar visual "social ready" (Reels/TikTok).
+      // Se já mexeu, respeita a preferência.
+      setColorAdjust((c) => {
+        const untouched = c.brightness === 100 && c.contrast === 100 && c.saturate === 100;
+        if (!untouched) return c;
+        return { brightness: 104, contrast: 110, saturate: 114 };
+      });
       // Se legendas automáticas ligadas, gera direto do word timestamps
       // sem call LLM extra.
       if (autoCaptionsEnabled && result.words?.length) {
@@ -3022,12 +3054,43 @@ async function callMistakeDetectionAPI(words) {
                 </Panel>
               )}
 
+              {activeTool === "music" && (
+                <Panel title="Música">
+                  <MusicLibrary
+                    selectedMusicId={selectedMusicId}
+                    onSelect={setSelectedMusicId}
+                  />
+                  {selectedMusicId && (() => {
+                    const t = getMusicById(selectedMusicId);
+                    return t ? (
+                      <p style={{ color: "#9A9AA5" }} className="text-[10px] mt-2 leading-snug">
+                        Selecionado: <span style={{ color: "#F5F5F7" }} className="font-semibold">{t.title}</span>. Volume no painel "Volume".
+                      </p>
+                    ) : null;
+                  })()}
+                </Panel>
+              )}
+
               {activeTool === "volume" && (
                 <Panel title="Volume">
-                  <SliderRow label="Volume" value={Math.round(volume * 100)} min={0} max={100}
+                  <SliderRow label="Fala (vídeo)" value={Math.round(volume * 100)} min={0} max={100}
                     onChange={(v) => setVolume(v / 100)} suffix="%" />
-                  <p style={{ color: "#9A9AA5" }} className="text-xs mt-1">
-                    Afeta a pré-visualização. A exportação usa o áudio original do arquivo.
+                  <SliderRow label="Música" value={Math.round(musicVolume * 100)} min={0} max={100}
+                    onChange={(v) => setMusicVolume(v / 100)} suffix="%" />
+                  <SliderRow label="Fundo (ambiente)" value={Math.round(ambientVolume * 100)} min={0} max={100}
+                    onChange={(v) => setAmbientVolume(v / 100)} suffix="%" />
+                  {selectedMusicId && (() => {
+                    const t = getMusicById(selectedMusicId);
+                    return t ? (
+                      <div style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} className="rounded-lg p-2 mt-2">
+                        <p style={{ color: "#6B6B75" }} className="text-[10px] uppercase font-bold mb-0.5">Música selecionada</p>
+                        <p style={{ color: "#F5F5F7" }} className="text-xs font-semibold">{t.title}</p>
+                        <p style={{ color: "#9A9AA5" }} className="text-[10px]">{t.artist}</p>
+                      </div>
+                    ) : null;
+                  })()}
+                  <p style={{ color: "#9A9AA5" }} className="text-[10px] mt-2 leading-snug">
+                    Fala e música tocam mixadas na pré-visualização. Exportação atual mantém áudio original do vídeo — mix final chega na próxima versão.
                   </p>
                 </Panel>
               )}
@@ -3805,6 +3868,8 @@ async function callMistakeDetectionAPI(words) {
           {toast}
         </div>
       )}
+      {/* Áudio da música de fundo — sincronizado com play/pause do vídeo */}
+      <audio ref={musicAudioRef} className="hidden" />
     </div>
   );
 }
