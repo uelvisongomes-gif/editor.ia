@@ -10,6 +10,7 @@ import { detectWordRepeat, detectBigramStutter } from "./detectors/stutter.js";
 import { detectFillerChain, detectElongatedHesitation, detectStandaloneHesitation } from "./detectors/filler.js";
 import { detectRestartMarkers, detectHangingConnectorAbandon, detectSentenceHeadRepeat } from "./detectors/falseStart.js";
 import { detectLowClarity } from "./detectors/lowClarity.js";
+import { detectStretchedWord } from "./detectors/stretchedWord.js";
 
 /**
  * @param {Array<{word:string,start:number,end:number}>} words
@@ -34,5 +35,6 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
     ...detectHiddenSilence(ctx),
     ...detectSentenceHeadRepeat(ctx),
     ...detectLowClarity(ctx),
+    ...detectStretchedWord(ctx),
   ];
 }
