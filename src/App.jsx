@@ -540,18 +540,11 @@ function findZoomCuesFromWords(words, pauseGap = 0.5, minGapBetweenCues = 3) {
   return cues;
 }
 
-function computeTransitionOpacity(t, seg, segIndex, totalSegs, enabled, transitionDuration) {
-  if (!enabled) return 1;
-  let opacity = 1;
-  const elapsed = t - seg.start;
-  const remaining = seg.end - t;
-  if (segIndex > 0 && elapsed < transitionDuration) {
-    opacity = Math.min(opacity, elapsed / transitionDuration);
-  }
-  if (segIndex < totalSegs - 1 && remaining < transitionDuration) {
-    opacity = Math.min(opacity, remaining / transitionDuration);
-  }
-  return Math.max(0, opacity);
+function computeTransitionOpacity(_t, _seg, _segIndex, _totalSegs, _enabled, _transitionDuration) {
+  // Desabilitado: usuário pediu para NUNCA escurecer nos cortes.
+  // A "transição" entre cortes agora é feita pelo Zoom In pós-corte
+  // (smartZoom.js). Mantém a assinatura pra compat com callers.
+  return 1;
 }
 
 function pickTickInterval(duration) {

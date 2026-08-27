@@ -14,17 +14,14 @@
 let _id = 1;
 const nextId = () => "zoom-" + _id++;
 
-// Níveis centralizados — perceptíveis a olho nu. Ajuste aqui pra
-// mudar o visual global.
-// Zoom in 30% mais forte que antes (a pedido do usuário). Multiplicativo
-// na escala pra impacto visível: 1.12 * 1.3 = 1.456 etc.
+// Níveis centralizados — perceptíveis mas moderados (ref 1.12-1.16 do
+// usuário). Multiplicados por BASE_ZOOM (1.10) na scaleAt do renderer,
+// dão perceived +14/+20/+26% respectivamente.
 export const ZOOM_LEVELS = {
-  light:  { value: 1.46, label: "Suave" },       // era 1.12
-  medium: { value: 1.56, label: "Moderado" },    // era 1.20
-  strong: { value: 1.70, label: "Forte" },       // era 1.30
-  // Zoom out — valores REPRESENTAM saída da imagem. O renderer converte
-  // para escalas efetivas usando o BASE_ZOOM (ver base_zoom abaixo) pra
-  // evitar borda preta.
+  light:  { value: 1.14, label: "Suave" },
+  medium: { value: 1.20, label: "Moderado" },
+  strong: { value: 1.26, label: "Forte" },
+  // Zoom out — retorno suave para NORMAL (nunca abaixo de 1.0 efetivo).
   out_light:  { value: 0.93, label: "Suave" },
   out_medium: { value: 0.87, label: "Moderado" },
   out_strong: { value: 0.80, label: "Forte" },
@@ -66,12 +63,6 @@ const EMPHASIS_MARKERS = [
   "importante", "essencial", "principal", "fundamental", "crítico",
   "muito", "problema", "solução", "resposta",
 ];
-// Sentenças que sinalizam mudança de assunto — bom lugar pra zoom OUT.
-const TRANSITION_MARKERS = [
-  "depois", "em seguida", "agora", "então vamos", "próximo",
-  "outro ponto", "além disso", "por outro lado", "vamos ao",
-];
-
 function normalize(s) { return (s || "").toLowerCase(); }
 
 function scoreSentence(sentence) {
@@ -106,14 +97,6 @@ function pickScale(level) {
   return spec.value;
 }
 
-// Detecta se depois de uma sentença de impacto há uma "transição" — vale
-// um zoom out curto pra criar respiro.
-function isTransitionAfter(currentSentence, nextSentence) {
-  if (!nextSentence) return false;
-  const text = normalize(nextSentence.text);
-  return TRANSITION_MARKERS.some((m) => text.startsWith(m) || text.includes(" " + m + " "));
-}
-
 /**
  * @param {object} args
  * @param {{sentences:Array}} args.semantic
@@ -121,19 +104,18 @@ function isTransitionAfter(currentSentence, nextSentence) {
  * @param {object} args.profile
  * @returns {Array<{id,type,mode,start,end,scale,fadeIn,fadeOut,reason,confidence,sentenceIndex,text}>}
  */
+// Constantes de ritmo — usuário pediu:
+//   - Corte SEMPRE gera Zoom In pós-corte (2-4s, seguindo unidade de fala)
+//   - Se 10-12s sem corte, procurar melhor momento pra Zoom In
+//   - Corte reinicia contador (naturalmente: corte já é anchor visual)
+const NO_CUT_GAP_TRIGGER = 11.0;  // janela sem estímulo → força smart zoom
+const CUT_ZOOM_MIN_DUR = 2.0;     // corte-zoom nunca menor que isso
+const CUT_ZOOM_MAX_DUR = 4.0;     // nem maior que isso
+const OVERLAP_TOLERANCE = 0.5;    // pra evitar zoom em cima de outro zoom
+
 export function computeZoomEvents({ semantic, segments, profile }) {
   const sentences = semantic?.sentences || [];
-  // Nota: NÃO retorna cedo quando não há sentenças — ainda podemos ter
-  // zoom de transição pra cada cut point.
-  const zoomsPerMinute = (profile.zoomTargetPer30s ?? 3) * 2; // dobra pra minuto
-  const fade = profile.zoomFadeSec ?? 0.4;
-  const minGap = profile.zoomMinGapSec ?? 6;
-  // Duração total ativa (não conta segments removidos) — usada pra alvo.
-  const activeDuration = segments?.length
-    ? segments.filter((s) => !s.deleted && s.action !== "review").reduce((a, s) => a + (s.end - s.start), 0)
-    : (sentences[sentences.length - 1].end - sentences[0].start);
-  const targetEvents = Math.max(1, Math.round((activeDuration / 60) * zoomsPerMinute));
-  const hardMax = profile.zoomMaxEvents ?? 12;
+  const fade = profile.zoomFadeSec ?? 0.5;
 
   const inActiveSegment = (t) => {
     if (!segments?.length) return true;
@@ -142,104 +124,121 @@ export function computeZoomEvents({ semantic, segments, profile }) {
     return !(s.deleted || s.action === "review" || s.action === "trim");
   };
 
-  // Score todas + filtra ativas + threshold mínimo
-  const scored = sentences
-    .map((s) => ({ s, score: scoreSentence(s) }))
-    .filter(({ s, score }) => {
-      if (score < 0.4) return false;
-      const zoomStart = s.start + Math.min(0.20, (s.end - s.start) * 0.10);
-      return inActiveSegment(zoomStart);
-    })
-    .sort((a, b) => b.score - a.score);
+  // Segments ativos ordenados — usados pra localizar pontos de corte.
+  const activeSegs = segments?.length
+    ? segments.filter((s) => !s.deleted && s.action !== "review" && s.action !== "trim")
+              .sort((a, b) => a.start - b.start)
+    : [];
+
+  // Retorna sentença que contém timestamp t (ou null).
+  const sentenceAt = (t) => sentences.find((s) => t >= s.start && t < s.end) || null;
+
+  // Retorna sentença que começa depois de t (a próxima na timeline).
+  const sentenceStartingAfter = (t) => sentences.find((s) => s.start >= t) || null;
 
   const events = [];
-  const wantEvents = Math.min(hardMax, targetEvents);
 
-  for (const { s, score } of scored) {
-    if (events.length >= wantEvents) break;
-    const zoomStart = s.start + Math.min(0.20, (s.end - s.start) * 0.10);
-    if (events.some((e) => Math.abs(e.start - zoomStart) < minGap)) continue;
-    const level = pickLevel(s, score);
-    const scale = pickScale(level);
-    // Duração acompanha a sentença: dura ~80% do intervalo dela, com
-    // limites conservadores (mínimo 1.2s, máximo 7s).
-    const sentDur = s.end - s.start;
-    const eventDur = Math.max(1.2, Math.min(7.0, sentDur * 0.82));
-    const start = zoomStart;
-    const end = Math.min(s.end - 0.1, start + eventDur);
-    const reason = s.role === "cta" ? "cta" :
-                   s.role === "point" ? "main_point" :
-                   IMPACT_MARKERS.some((m) => normalize(s.text).includes(m)) ? "impact_moment" :
-                   "emphasis";
-    events.push({
-      id: nextId(),
-      type: "zoom",
-      mode: "zoom_in",
-      start, end,
-      scale,
-      fadeIn: fade,
-      fadeOut: fade,
-      reason,
-      level,
-      confidence: Math.round(score * 100) / 100,
-      sentenceIndex: s.index,
-      text: s.text,
-    });
-    // Se a sentença seguinte é uma transição, adiciona zoom OUT curto
-    // depois desse evento (respiro visual). Não conta pro wantEvents.
-    const nextSentence = sentences[s.index + 1];
-    if (isTransitionAfter(s, nextSentence) && (events.length < hardMax)) {
-      const outStart = end + 0.15;
-      const outEnd = Math.min(nextSentence.end - 0.1, outStart + 1.6);
-      if (outEnd > outStart + 0.4 && inActiveSegment(outStart)) {
-        const outScale = pickScale("out_light");
-        events.push({
-          id: nextId(),
-          type: "zoom",
-          mode: "zoom_out",
-          start: outStart, end: outEnd,
-          scale: outScale,
-          fadeIn: fade, fadeOut: fade,
-          reason: "topic_transition",
-          level: "out",
-          confidence: 0.7,
-          sentenceIndex: nextSentence.index,
-          text: nextSentence.text,
-        });
-      }
-    }
-  }
-
-  // TRANSITION PUNCH: em cada ponto de corte (junção entre dois segments
-  // ativos), aplica um zoom in leve curto (~0.7s) que funciona como
-  // transição visual — evita o corte parecer seco. Não conflita com
-  // zooms grandes: se já existe zoom começando dentro de 1.5s do ponto,
-  // pula.
-  if (segments?.length && (profile.zoomTransitionOnCuts ?? true)) {
-    const activeSegs = segments.filter((s) => !s.deleted && s.action !== "review").sort((a, b) => a.start - b.start);
+  // --- FASE 1: cada corte executado gera Zoom In pós-corte ------------
+  // A "duração" acompanha a próxima unidade de fala (sentence contendo
+  // o cut point) e é clamped em [2s, 4s].
+  if (activeSegs.length && (profile.zoomTransitionOnCuts ?? true)) {
     for (let i = 1; i < activeSegs.length; i++) {
       const cutPoint = activeSegs[i].start;
-      // Só se o segment tem duração pra caber o punch.
-      if (activeSegs[i].end - cutPoint < 1.0) continue;
-      // Evita colidir com zoom grande já planejado.
-      const conflict = events.find((e) => Math.abs(e.start - cutPoint) < 1.5);
-      if (conflict) continue;
-      const punchScale = ZOOM_LEVELS.light.value;
+      const segEnd = activeSegs[i].end;
+      // Se o segment é curto demais pra segurar o zoom, pula.
+      if (segEnd - cutPoint < CUT_ZOOM_MIN_DUR) continue;
+
+      // Fim da unidade de fala: sentence que contém cutPoint, ou a próxima.
+      let containing = sentenceAt(cutPoint) || sentenceStartingAfter(cutPoint);
+      let sentenceEnd = containing ? containing.end : cutPoint + 3.0;
+
+      // Duração = até fim da unidade, clamped, e nunca ultrapassa segmento.
+      let dur = Math.min(sentenceEnd - cutPoint - 0.15, CUT_ZOOM_MAX_DUR);
+      dur = Math.max(CUT_ZOOM_MIN_DUR, dur);
+      dur = Math.min(dur, segEnd - cutPoint - 0.1);
+      if (dur < CUT_ZOOM_MIN_DUR) continue;
+
       events.push({
         id: nextId(),
         type: "zoom",
         mode: "zoom_in",
         start: cutPoint,
-        end: cutPoint + 0.7,
-        scale: punchScale,
-        fadeIn: 0.2,
-        fadeOut: 0.25,
+        end: cutPoint + dur,
+        scale: ZOOM_LEVELS.light.value,
+        fadeIn: 0.15,
+        fadeOut: Math.max(0.4, fade), // retorno suave — nunca cliff
         reason: "cut_transition",
         level: "light",
         confidence: 1.0,
-        sentenceIndex: null,
-        text: "",
+        sentenceIndex: containing?.index ?? null,
+        text: containing?.text || "",
         isTransition: true,
+      });
+    }
+  }
+
+  // --- FASE 2: preencher gaps ≥ 10-12s sem nenhum estímulo visual -----
+  // Anchors do ritmo: início do vídeo + cada cut-zoom (que reinicia o
+  // contador) + fim do vídeo. Se dois anchors têm gap > NO_CUT_GAP_TRIGGER,
+  // insere UM zoom-in semântico no melhor momento dentro do gap.
+  if (sentences.length && activeSegs.length) {
+    const timelineStart = activeSegs[0].start;
+    const timelineEnd = activeSegs[activeSegs.length - 1].end;
+    const anchors = [timelineStart, ...events.map((e) => e.start), timelineEnd].sort((a, b) => a - b);
+
+    for (let i = 0; i < anchors.length - 1; i++) {
+      const gapStart = anchors[i];
+      const gapEnd = anchors[i + 1];
+      const gap = gapEnd - gapStart;
+      if (gap < NO_CUT_GAP_TRIGGER) continue;
+
+      // Candidatos: sentenças que caem NO MEIO do gap (respiro dos 2s
+      // iniciais pós-anchor e 2s finais pré-anchor pra não colidir).
+      const searchFrom = gapStart + 2.0;
+      const searchTo = gapEnd - 2.0;
+      if (searchTo <= searchFrom) continue;
+
+      const candidates = sentences
+        .filter((s) => s.start >= searchFrom && s.start < searchTo)
+        .filter((s) => inActiveSegment(s.start + 0.15))
+        .map((s) => ({ s, score: scoreSentence(s) }))
+        .filter(({ score }) => score >= 0.35)
+        .sort((a, b) => b.score - a.score);
+      if (!candidates.length) continue;
+
+      const { s, score } = candidates[0];
+      const level = pickLevel(s, score);
+      const scale = pickScale(level);
+      const zoomStart = s.start + Math.min(0.20, (s.end - s.start) * 0.10);
+      const sentDur = s.end - s.start;
+      const eventDur = Math.max(CUT_ZOOM_MIN_DUR, Math.min(3.5, sentDur * 0.82));
+      const end = Math.min(s.end - 0.1, zoomStart + eventDur);
+      if (end - zoomStart < 1.2) continue;
+
+      // Dedup: evita cair em cima de zoom existente.
+      const conflict = events.some((e) =>
+        Math.max(e.start, zoomStart) < Math.min(e.end, end) + OVERLAP_TOLERANCE
+      );
+      if (conflict) continue;
+
+      const reason = s.role === "cta" ? "cta" :
+                     s.role === "point" ? "main_point" :
+                     IMPACT_MARKERS.some((m) => normalize(s.text).includes(m)) ? "impact_moment" :
+                     "emphasis";
+      events.push({
+        id: nextId(),
+        type: "zoom",
+        mode: "zoom_in",
+        start: zoomStart,
+        end,
+        scale,
+        fadeIn: 0.25,
+        fadeOut: Math.max(0.5, fade),
+        reason,
+        level,
+        confidence: Math.round(score * 100) / 100,
+        sentenceIndex: s.index,
+        text: s.text,
       });
     }
   }
