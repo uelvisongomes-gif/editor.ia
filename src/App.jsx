@@ -2500,63 +2500,38 @@ async function callMistakeDetectionAPI(words) {
                     IA encontra erros e edita seu vídeo.
                   </p>
 
-                  <p style={{ color: "#6B6B75" }} className="text-[10px] font-bold uppercase tracking-wide mb-1.5">
-                    Intensidade da edição
-                  </p>
-                  <div className="flex flex-col gap-1.5 mb-3">
-                    {Object.values(EDITING_PROFILES).map((p) => {
-                      const selected = intensityId === p.id;
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => setIntensityId(p.id)}
-                          disabled={smartBusy}
-                          style={{
-                            background: selected ? "#2A1B10" : "#0F0F13",
-                            border: selected ? "1px solid #FF6A2B" : "1px solid #1F1F26",
-                            opacity: smartBusy ? 0.6 : 1,
-                          }}
-                          className="text-left p-2 rounded-lg"
-                        >
-                          <span className="block text-xs font-semibold" style={{ color: "#F5F5F7" }}>
-                            {p.label}
-                          </span>
-                          <span className="block text-[10px] leading-snug" style={{ color: "#9A9AA5" }}>
-                            {p.description}
-                          </span>
-                        </button>
-                      );
-                    })}
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <button
+                      onClick={() => setSmartZoomEnabled((v) => !v)}
+                      style={{
+                        background: smartZoomEnabled ? "#FF6A2B" : "#0F0F13",
+                        color: smartZoomEnabled ? "#1A0A02" : "#C9C9D1",
+                        border: smartZoomEnabled ? "1px solid #FF6A2B" : "1px solid #1F1F26",
+                      }}
+                      className="py-2 rounded-lg text-xs font-bold"
+                    >
+                      Zoom
+                    </button>
+                    <button
+                      onClick={() => {
+                        const next = !autoCaptionsEnabled;
+                        setAutoCaptionsEnabled(next);
+                        if (next && wordTimestamps.length) {
+                          setCaptions(buildCaptionsFromWords(wordTimestamps, 7));
+                        } else if (!next) {
+                          setCaptions([]);
+                        }
+                      }}
+                      style={{
+                        background: autoCaptionsEnabled ? "#FF6A2B" : "#0F0F13",
+                        color: autoCaptionsEnabled ? "#1A0A02" : "#C9C9D1",
+                        border: autoCaptionsEnabled ? "1px solid #FF6A2B" : "1px solid #1F1F26",
+                      }}
+                      className="py-2 rounded-lg text-xs font-bold"
+                    >
+                      Legenda
+                    </button>
                   </div>
-
-                  <label className="flex items-center justify-between mb-2 cursor-pointer" style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} onClick={(e) => e.stopPropagation()}>
-                    <span className="text-[11px] px-2 py-1.5" style={{ color: "#C9C9D1" }}>Zoom automático</span>
-                    <span className="pr-2">
-                      <input
-                        type="checkbox"
-                        checked={smartZoomEnabled}
-                        onChange={(e) => setSmartZoomEnabled(e.target.checked)}
-                      />
-                    </span>
-                  </label>
-                  <label className="flex items-center justify-between mb-3 cursor-pointer" style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} onClick={(e) => e.stopPropagation()}>
-                    <span className="text-[11px] px-2 py-1.5" style={{ color: "#C9C9D1" }}>Legendas automáticas</span>
-                    <span className="pr-2">
-                      <input
-                        type="checkbox"
-                        checked={autoCaptionsEnabled}
-                        onChange={(e) => {
-                          setAutoCaptionsEnabled(e.target.checked);
-                          // Se ligando agora e já temos words, gera na hora.
-                          if (e.target.checked && wordTimestamps.length) {
-                            setCaptions(buildCaptionsFromWords(wordTimestamps, 7));
-                          } else if (!e.target.checked) {
-                            setCaptions([]);
-                          }
-                        }}
-                      />
-                    </span>
-                  </label>
 
                   {autoCaptionsEnabled && (() => {
                     const currentStyle = CAPTION_STYLES.find((s) => s.id === captionStylePreset) || CAPTION_STYLES[0];
@@ -2713,7 +2688,7 @@ async function callMistakeDetectionAPI(words) {
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold disabled:opacity-60"
                   >
                     {smartBusy ? <Loader2 size={16} className="animate-spin" /> : <Brain size={16} />}
-                    {smartBusy ? "Analisando..." : (edl.length ? "Reanalisar com esse perfil" : "Analisar e propor cortes")}
+                    {smartBusy ? "Analisando..." : (edl.length ? "Rodar novamente" : "Edição inteligente")}
                   </button>
 
                   {smartBusy && (
