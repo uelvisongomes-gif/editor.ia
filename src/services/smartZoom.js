@@ -83,6 +83,10 @@ const NO_CUT_GAP_TRIGGER = 11.0;  // janela sem estímulo → força smart zoom
 const CUT_ZOOM_MIN_DUR = 2.0;     // corte-zoom nunca menor que isso
 const CUT_ZOOM_MAX_DUR = 4.0;     // nem maior que isso
 const OVERLAP_TOLERANCE = 0.5;    // pra evitar zoom em cima de outro zoom
+// Gap MÍNIMO entre FIM de um zoom e INÍCIO do próximo. Sem isso a imagem
+// "sobe → volta → sobe → volta" e parece 2 pulsos distintos ao invés de
+// respiração natural.
+const MIN_REST_BETWEEN_ZOOMS_SEC = 2.5;
 
 export function computeZoomEvents({ semantic, segments, profile }) {
   const sentences = semantic?.sentences || [];
@@ -215,7 +219,41 @@ export function computeZoomEvents({ semantic, segments, profile }) {
   }
 
   events.sort((a, b) => a.start - b.start);
-  return events;
+
+  // Anti-pulso: se dois zooms consecutivos têm gap < MIN_REST_BETWEEN,
+  // funde-os OU descarta o de menor prioridade. cut_transition (conf 1.0)
+  // vence semantic. Se ambos são cut_transition, funde num único zoom
+  // contínuo (evita "sobe-desce-sobe-desce").
+  const merged = [];
+  for (const ev of events) {
+    const prev = merged[merged.length - 1];
+    if (!prev) { merged.push(ev); continue; }
+    const rest = ev.start - prev.end;
+    if (rest >= MIN_REST_BETWEEN_ZOOMS_SEC) { merged.push(ev); continue; }
+
+    // Muito próximos: decidir.
+    const prevIsCut = prev.isTransition === true;
+    const curIsCut = ev.isTransition === true;
+    if (prevIsCut && curIsCut) {
+      // Merge — vira zoom contínuo do primeiro cut até o fim do segundo
+      prev.end = Math.max(prev.end, ev.end);
+      prev.reason = "cut_transition_merged";
+      prev.text = ev.text || prev.text;
+    } else if (prev.confidence >= ev.confidence) {
+      // Mantém o anterior, descarta o novo.
+    } else {
+      // O novo tem mais confiança — substitui o anterior, MAS mantém
+      // o gap de descanso: ajusta start se necessário.
+      const desiredStart = prev.end + MIN_REST_BETWEEN_ZOOMS_SEC;
+      if (desiredStart < ev.end - 1.5) {
+        ev.start = desiredStart;
+        merged.push(ev);
+      }
+      // Se não sobra tempo pro zoom novo, desiste (previne pulsar).
+    }
+  }
+
+  return merged;
 }
 
 /**

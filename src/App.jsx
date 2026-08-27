@@ -2871,11 +2871,13 @@ async function callMistakeDetectionAPI(words) {
                     // Posições relativas ao VIDEO CONTAINER, respeitando
                     // seleção do usuário (Alta/Média/Baixa). Valores da
                     // spec: Alta ~18%, Média ~50%, Baixa ~75%.
+                    // Alta ~15%, Média ~50%, Baixa ~88% (rodapé com safe area
+                    // de ~12% pra UI TikTok/Reels não cobrir).
                     const posStyle = {
-                      top:    { top: "18%",    transform: "translate(-50%, -50%)" },
-                      center: { top: "50%",    transform: "translate(-50%, -50%)" },
-                      bottom: { top: "75%",    transform: "translate(-50%, -50%)" },
-                    }[captionPosition] || { top: "75%", transform: "translate(-50%, -50%)" };
+                      top:    { top: "15%", transform: "translate(-50%, -50%)" },
+                      center: { top: "50%", transform: "translate(-50%, -50%)" },
+                      bottom: { top: "88%", transform: "translate(-50%, -50%)" },
+                    }[captionPosition] || { top: "88%", transform: "translate(-50%, -50%)" };
                     const text = captionStyle.uppercase ? activeCaption.text.toUpperCase() : activeCaption.text;
                     return (
                       <>
