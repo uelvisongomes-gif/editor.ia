@@ -11,8 +11,8 @@ import { IMPACT_MARKERS, EMPHASIS_MARKERS } from "./emphasisModel.js";
 // -----------------------------------------------------------------------
 const DEFAULTS = {
   minWords: 2,
-  targetWords: 5,        // sweet spot: dá pra caber em 1 linha larga
-  maxWords: 8,           // hard cap — prioriza HORIZONTAL, não empilha
+  targetWords: 4,        // sweet spot pra caber em 1 linha
+  maxWords: 7,           // hard cap — nunca gera 3+ linhas na render
   minDurationSec: 0.8,   // abaixo disso a cue "pisca"
   maxDurationSec: 3.8,   // acima disso a legenda fica "velha" na tela
   naturalBreakGapSec: 0.45, // exige pausa mais clara pra fechar cue

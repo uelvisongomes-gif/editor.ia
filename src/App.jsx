@@ -949,6 +949,7 @@ export default function AiVideoEditor() {
   const [autoCaptionsEnabled, setAutoCaptionsEnabled] = useState(false);
   const [captionStylePreset, setCaptionStylePreset] = useState("classico");
   const [captionPosition, setCaptionPosition] = useState("bottom");
+  const [captionStyleGridOpen, setCaptionStyleGridOpen] = useState(true);
   // Debug panel só aparece com ?debug=1 na URL.
   const debugMode = typeof window !== "undefined" && window.location.search.includes("debug=1");
   // --- Diagnóstico forense ---
@@ -2557,11 +2558,49 @@ async function callMistakeDetectionAPI(words) {
                     </span>
                   </label>
 
-                  {autoCaptionsEnabled && (
+                  {autoCaptionsEnabled && (() => {
+                    const currentStyle = CAPTION_STYLES.find((s) => s.id === captionStylePreset) || CAPTION_STYLES[0];
+                    return (
                     <div className="mb-3">
-                      <p style={{ color: "#6B6B75" }} className="text-[10px] font-bold uppercase tracking-wide mb-1.5">
-                        Estilo da legenda ({CAPTION_STYLES.length})
-                      </p>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <p style={{ color: "#6B6B75" }} className="text-[10px] font-bold uppercase tracking-wide">
+                          {captionStyleGridOpen ? `Estilo da legenda (${CAPTION_STYLES.length})` : "Estilo selecionado"}
+                        </p>
+                        <button
+                          onClick={() => setCaptionStyleGridOpen((v) => !v)}
+                          style={{ color: "#FF6A2B", background: "transparent" }}
+                          className="text-[10px] font-semibold hover:underline"
+                        >
+                          {captionStyleGridOpen ? "Fechar" : "Trocar estilo"}
+                        </button>
+                      </div>
+                      {!captionStyleGridOpen && (
+                        <button
+                          onClick={() => setCaptionStyleGridOpen(true)}
+                          style={{ background: "#0F0F13", border: "1px solid #FF6A2B" }}
+                          className="w-full p-1 rounded-lg mb-2"
+                          title="Clique pra escolher outro estilo"
+                        >
+                          <div className="flex items-center justify-center overflow-hidden" style={{ background: "#0A0A0A", borderRadius: 6, height: 60 }}>
+                            <span style={{
+                              background: currentStyle.bg || (currentStyle.bgGradient ? `linear-gradient(90deg, ${currentStyle.bgGradient.from}, ${currentStyle.bgGradient.to})` : "transparent"),
+                              color: currentStyle.textColor,
+                              fontWeight: currentStyle.weight,
+                              fontFamily: currentStyle.fontFamily || "sans-serif",
+                              fontSize: 12,
+                              textTransform: currentStyle.uppercase ? "uppercase" : "none",
+                              padding: (currentStyle.bg || currentStyle.bgGradient) ? "3px 8px" : 0,
+                              borderRadius: (currentStyle.bg || currentStyle.bgGradient) ? (currentStyle.pillRadius ?? 4) : 0,
+                              WebkitTextStroke: currentStyle.strokeColor ? `${Math.min(1.5, currentStyle.strokeWidth || 1)}px ${currentStyle.strokeColor}` : undefined,
+                              textShadow: currentStyle.shadow ? `0 ${currentStyle.shadow.offsetY || 2}px ${currentStyle.shadow.blur || 6}px ${currentStyle.shadow.color}` : undefined,
+                            }}>THE LIFE IN MOTION</span>
+                          </div>
+                          <span className="block text-[9px] text-center mt-1" style={{ color: "#FF6A2B" }}>
+                            {currentStyle.label.replace(/^\d+\.\s*/, "")}
+                          </span>
+                        </button>
+                      )}
+                      {captionStyleGridOpen && (
                       <div className="grid grid-cols-2 gap-2 mb-2 max-h-[520px] overflow-y-auto pr-1">
                         {CAPTION_STYLES.map((s) => {
                           const active = captionStylePreset === s.id;
@@ -2573,7 +2612,11 @@ async function callMistakeDetectionAPI(words) {
                           return (
                             <button
                               key={s.id}
-                              onClick={() => { setCaptionStylePreset(s.id); setCaptionStyleId(s.id); }}
+                              onClick={() => {
+                                setCaptionStylePreset(s.id);
+                                setCaptionStyleId(s.id);
+                                setCaptionStyleGridOpen(false);
+                              }}
                               style={{
                                 background: active ? "#2A1B10" : "#0F0F13",
                                 border: active ? "1px solid #FF6A2B" : "1px solid #1F1F26",
@@ -2648,6 +2691,7 @@ async function callMistakeDetectionAPI(words) {
                           );
                         })}
                       </div>
+                      )}
                       <div className="flex items-center gap-1 mb-1">
                         <span style={{ color: "#6B6B75" }} className="text-[10px]">Posição:</span>
                         {[["top", "Alta"], ["center", "Média"], ["bottom", "Baixa"]].map(([id, label]) => (
@@ -2659,7 +2703,8 @@ async function callMistakeDetectionAPI(words) {
                         ))}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
 
                   <button
                     onClick={runIntelligentEdit}
@@ -3070,13 +3115,13 @@ async function callMistakeDetectionAPI(words) {
                     // Posições relativas ao VIDEO CONTAINER, respeitando
                     // seleção do usuário (Alta/Média/Baixa). Valores da
                     // spec: Alta ~18%, Média ~50%, Baixa ~75%.
-                    // Alta 12% e Baixa 88% — simétricos (mesmo respiro de
-                    // 12% em cima e embaixo). Média no centro exato.
+                    // Alta 8% e Baixa 92% — safe area ~8% em cima e embaixo.
+                    // (25% mais pra fora do que antes, a pedido do usuário)
                     const posStyle = {
-                      top:    { top: "12%", transform: "translate(-50%, -50%)" },
+                      top:    { top: "8%",  transform: "translate(-50%, -50%)" },
                       center: { top: "50%", transform: "translate(-50%, -50%)" },
-                      bottom: { top: "88%", transform: "translate(-50%, -50%)" },
-                    }[captionPosition] || { top: "88%", transform: "translate(-50%, -50%)" };
+                      bottom: { top: "92%", transform: "translate(-50%, -50%)" },
+                    }[captionPosition] || { top: "92%", transform: "translate(-50%, -50%)" };
                     const text = captionStyle.uppercase ? activeCaption.text.toUpperCase() : activeCaption.text;
                     return (
                       <>
@@ -3104,12 +3149,12 @@ async function callMistakeDetectionAPI(words) {
                               padding: (captionStyle.bg || captionStyle.bgGradient) ? "0.35em 0.7em" : 0,
                               borderRadius: (captionStyle.bg || captionStyle.bgGradient) ? (captionStyle.pillRadius ?? 8) : 0,
                               border: captionStyle.borderColor && captionStyle.borderWidth ? `${captionStyle.borderWidth}px solid ${captionStyle.borderColor}` : undefined,
-                              display: "inline-block",   // cresce só no que precisa
-                              maxWidth: "100%",
-                              // HARD CAP 2 linhas visualmente:
-                              WebkitLineClamp: 2,
+                              // HARD CAP 2 linhas (nunca 3+):
+                              display: "-webkit-box",
                               WebkitBoxOrient: "vertical",
+                              WebkitLineClamp: 2,
                               overflow: "hidden",
+                              maxWidth: "100%",
                               wordBreak: "normal",
                               overflowWrap: "break-word",
                             }}
@@ -3117,11 +3162,6 @@ async function callMistakeDetectionAPI(words) {
                             {text}
                           </span>
                         </div>
-                        {debugMode && (
-                          <div className="absolute top-1 left-1 text-[10px] font-mono" style={{ color: "#FFD400", background: "rgba(0,0,0,0.7)", padding: "2px 4px", borderRadius: 3, pointerEvents: "none" }}>
-                            pos={captionPosition} y={posStyle.top} w=92% cap={activeCaption.words?.length || 0}w
-                          </div>
-                        )}
                       </>
                     );
                   })()}
