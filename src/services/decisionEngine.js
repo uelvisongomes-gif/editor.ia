@@ -241,9 +241,14 @@ function decideOne(cand, { profile, semanticSentences, protectedRanges, words = 
   }
 
   // Duration cap.
-  const durCap = isTechnical(cand)
-    ? (profile.maxTechnicalCutDur ?? Infinity)
-    : (profile.maxSemanticCutDur ?? Infinity);
+  // Exceção: silêncio puro (silence/no_speech/long_pause) NÃO tem cap —
+  // 10s de silêncio é obviamente silêncio, não vale downgradar pra review.
+  const pureSilence = ["silence", "no_speech", "long_pause"].includes(cand.primaryType);
+  const durCap = pureSilence
+    ? Infinity
+    : isTechnical(cand)
+      ? (profile.maxTechnicalCutDur ?? Infinity)
+      : (profile.maxSemanticCutDur ?? Infinity);
   if ((cand.end - cand.start) > durCap) {
     if (finalAction === "remove" || finalAction === "trim") {
       finalAction = "review";

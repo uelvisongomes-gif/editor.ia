@@ -3305,57 +3305,9 @@ async function callMistakeDetectionAPI(words) {
             </div>
 
             <div className="md:col-span-3 flex flex-col gap-3">
-              {debugMode && (edl.length > 0 || smartBusy) && (
-                <Panel title="Diagnóstico do pipeline">
-                  <p style={{ color: "#9A9AA5" }} className="text-[11px] mb-2 leading-snug">
-                    Rebobina o vídeo até o início do erro, clique <strong>Marcar início</strong>,
-                    depois até o fim e clique <strong>Marcar fim</strong>. O sistema captura o que
-                    o pipeline viu naquela janela.
-                  </p>
-                  <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                    <button onClick={markMissedStart}
-                      style={{ background: "#1B1B21", color: markStart != null ? "#5DCAA5" : "#C9C9D1" }}
-                      className="text-[11px] px-2 py-1 rounded-md font-semibold">
-                      {markStart != null ? `Início: ${markStart.toFixed(2)}s` : "Marcar início"}
-                    </button>
-                    <button onClick={markMissedEnd}
-                      disabled={markStart == null}
-                      style={{ background: markStart != null ? "#FF6A2B" : "#1B1B21", color: markStart != null ? "#1A0A02" : "#4A4A54" }}
-                      className="text-[11px] px-2 py-1 rounded-md font-semibold">
-                      Marcar fim
-                    </button>
-                    <button onClick={exportDiagnostic}
-                      style={{ background: "#1B1B21", color: "#78BAFF" }}
-                      className="text-[11px] px-2 py-1 rounded-md font-semibold">
-                      ⇩ Exportar JSON
-                    </button>
-                  </div>
-                  {missedDetections.length > 0 && (
-                    <div style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} className="rounded-lg p-2 mb-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span style={{ color: "#FFB020" }} className="text-[10px] font-bold uppercase">Erros não detectados ({missedDetections.length})</span>
-                        <button onClick={clearMissedDetections} style={{ color: "#F09595" }} className="text-[10px]">limpar</button>
-                      </div>
-                      <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
-                        {missedDetections.map((m) => (
-                          <div key={m.id} className="text-[10px]" style={{ color: "#C9C9D1" }}>
-                            <div className="flex justify-between">
-                              <span style={{ color: "#F5F5F7" }}>{m.start.toFixed(2)}→{m.end.toFixed(2)} ({m.duration}s)</span>
-                              <span style={{ color: m.detectedBySpeechError || m.detectedBySemantic || m.detectedBySilence ? "#5DCAA5" : "#F09595" }}>
-                                {m.detectedBySpeechError || m.detectedBySemantic || m.detectedBySilence ? "detectado" : "NÃO detectado"}
-                              </span>
-                            </div>
-                            {m.rawText && <div style={{ color: "#9A9AA5" }} className="italic">"{m.rawText.slice(0, 120)}"</div>}
-                            <div style={{ color: "#6B6B75" }}>
-                              speechError:{m.detectedBySpeechError ? "sim" : "não"} · semantic:{m.detectedBySemantic ? "sim" : "não"} · silence:{m.detectedBySilence ? "sim" : "não"} · candidatos:{m.candidatesInRange.length}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </Panel>
-              )}
+              {/* Painel de Diagnóstico do pipeline removido.
+                  Botão "Exportar JSON" agora vive no rodapé de
+                  "Problemas encontrados". */}
 
               {(edl.length > 0 || smartBusy) && (
                 <Panel title="Problemas encontrados">
@@ -3379,6 +3331,16 @@ async function callMistakeDetectionAPI(words) {
                       >
                         <RotateCcw size={12} /> Refazer
                       </button>
+                      {debugMode && (
+                        <button
+                          onClick={exportDiagnostic}
+                          title="Exportar diagnóstico JSON"
+                          style={{ background: "#1B1B21", color: "#78BAFF" }}
+                          className="px-2 py-1 rounded-md font-semibold flex items-center gap-1"
+                        >
+                          ⇩ JSON
+                        </button>
+                      )}
                     </div>
                     <span style={{ color: saveState === "error" ? "#F09595" : saveState === "saving" ? "#FFB020" : "#5DCAA5" }}>
                       {saveState === "saving" ? "Salvando..." : saveState === "saved" ? "Salvo" : saveState === "error" ? "Erro ao salvar" : ""}
@@ -3619,64 +3581,69 @@ function StatRow({ label, value }) {
 // Reels/Shorts, etc). O primeiro marcado ainda define o formato ativo,
 // mesma regra da UI antiga — só a apresentação mudou.
 function PlatformChips({ platforms, selected, onToggle }) {
-  const groups = platforms.reduce((acc, p) => {
-    const key = `${p.ratio[0]}:${p.ratio[1]}`;
-    (acc[key] = acc[key] || []).push(p);
-    return acc;
-  }, {});
-  const orderedKeys = Object.keys(groups).sort((a, b) => {
-    const [aw] = a.split(":").map(Number);
-    const [bw] = b.split(":").map(Number);
-    return aw - bw; // 1:1 primeiro, 9:16, 16:9
-  });
-  const selectedRatios = new Set(
-    platforms.filter((p) => selected.includes(p.id)).map((p) => `${p.ratio[0]}:${p.ratio[1]}`)
-  );
+  // Layout compacto — 2 linhas fixas:
+  //   Linha 1: [ ] Feed Insta       [ ] YouTube
+  //   Linha 2: [ ] TikTok / Shorts / Reels
+  const byId = (id) => platforms.find((p) => p.id === id);
+  const feed = byId("feed");
+  const youtube = byId("youtube");
+  const tiktok = byId("tiktok");
+  const shorts = byId("shorts");
+  const reels = byId("reels");
+  const isOn = (id) => selected.includes(id);
+
+  const Box = ({ id, label }) => {
+    if (!id) return null;
+    const on = isOn(id);
+    return (
+      <button
+        onClick={() => onToggle(id)}
+        title={label}
+        className="flex items-center gap-2 text-xs font-semibold"
+        style={{ color: on ? "#F5F5F7" : "#9A9AA5" }}
+      >
+        <span
+          style={{
+            width: 14, height: 14,
+            border: on ? "1.5px solid #FF6A2B" : "1.5px solid #4A4A54",
+            background: on ? "#FF6A2B" : "transparent",
+            borderRadius: 3,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          {on && <span style={{ color: "#1A0A02", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+        </span>
+        <span>{label}</span>
+      </button>
+    );
+  };
+
   const activeRatio = (() => {
     const first = platforms.find((p) => p.id === selected[0]);
     return first ? `${first.ratio[0]}:${first.ratio[1]}` : null;
   })();
+  const selectedRatios = new Set(
+    platforms.filter((p) => selected.includes(p.id)).map((p) => `${p.ratio[0]}:${p.ratio[1]}`)
+  );
   const hasMultipleRatios = selectedRatios.size > 1;
+
   return (
     <div className="flex flex-col gap-2">
-      {orderedKeys.map((ratio) => (
-        <div key={ratio} className="flex items-center gap-2 flex-wrap">
-          <span
-            title={ratio === activeRatio ? "Formato ativo de exportação" : "Formato disponível"}
-            style={{
-              color: ratio === activeRatio ? "#FF6A2B" : "#6B6B75",
-              background: ratio === activeRatio ? "#2A1B10" : "#0F0F13",
-              border: ratio === activeRatio ? "1px solid #FF6A2B" : "1px solid #1F1F26",
-            }}
-            className="text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded"
-          >
-            {ratio}
-          </span>
-          <div className="flex flex-wrap gap-1">
-            {groups[ratio].map((p) => {
-              const on = selected.includes(p.id);
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => onToggle(p.id)}
-                  title={p.label}
-                  style={{
-                    background: on ? "#FF6A2B" : "#1B1B21",
-                    color: on ? "#1A0A02" : "#C9C9D1",
-                  }}
-                  className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
-                >
-                  {p.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+      <div className="flex items-center gap-4">
+        <Box id={feed?.id} label="Feed Insta" />
+        <Box id={youtube?.id} label="YouTube" />
+      </div>
+      <div className="flex items-center gap-1.5 text-xs font-semibold flex-wrap">
+        <Box id={tiktok?.id} label="TikTok" />
+        <span style={{ color: "#4A4A54" }}>-</span>
+        <Box id={shorts?.id} label="Shorts" />
+        <span style={{ color: "#4A4A54" }}>-</span>
+        <Box id={reels?.id} label="Reels" />
+      </div>
       {hasMultipleRatios && (
         <p style={{ color: "#FFB020" }} className="text-[10px] leading-snug flex items-start gap-1">
           <AlertTriangle size={11} className="mt-0.5 flex-shrink-0" />
-          Você marcou destinos com proporções diferentes. A exportação vai usar {activeRatio} (a primeira marcada).
+          Formatos diferentes — exportação usará {activeRatio}.
         </p>
       )}
     </div>
