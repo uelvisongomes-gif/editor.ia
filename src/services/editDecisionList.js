@@ -18,6 +18,7 @@
 
 import { collectCandidates } from "./candidateAggregator.js";
 import { decideAll, applySafetyValidators } from "./decisionEngine.js";
+import { applyCutDensityGuard } from "./cutDensityGuard.js";
 
 let _idCounter = 1;
 const nextId = () => "edl-" + _idCounter++;
@@ -40,12 +41,19 @@ export function buildEDL({ duration, words, semantic, silences, speechErrors, pr
 
   // 3) Decide o destino de cada candidato — este é o problemCandidates.
   //    words é passado pro boundaryRefinement dentro do decisionEngine.
-  const problemCandidates = decideAll(rawCandidates, {
+  const initialDecided = decideAll(rawCandidates, {
     profile,
     semanticSentences,
     protectedRanges,
     words,
   });
+
+  // 3.5) Cut Density Guard — se o pipeline pretende gerar cortes acima
+  //      da densidade razoável pro perfil, os REMOVE de menor confidence
+  //      (não-surgical) viram REVIEW. Evita overcutting sem perder info.
+  const { decided: problemCandidates, metrics: densityMetrics } =
+    applyCutDensityGuard(initialDecided, profile, duration);
+  console.log("[buildEDL] density guard:", densityMetrics);
 
   // 4) Monta a EDL de fato — só os que viraram remove/trim/review entram.
   //    detected_only e dropped ficam SÓ no problemCandidates.
