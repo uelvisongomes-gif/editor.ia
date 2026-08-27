@@ -11,6 +11,7 @@ import { transcribe } from "./transcription.js";
 import { analyzeWaveform } from "./audioAnalysis.js";
 import { detectSilences } from "./silenceDetection.js";
 import { detectSpeechErrorsHeuristic } from "./heuristicSpeechErrors.js";
+import { buildSpeechActivity } from "./speechActivity.js";
 import { analyzeSemantics } from "./semanticAnalysis.js";
 import { buildNarrativeMap } from "./narrativeAnalysis.js";
 import { buildEDL } from "./editDecisionList.js";
@@ -68,6 +69,12 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
     waveform = await analyzeWaveform(videoUrl, duration);
   }
 
+  // Camada VAD deterministica: combina words + waveform em uma
+  // classificacao unificada (SPEECH/NO_SPEECH/UNCERTAIN) por slot.
+  // Detectores futuros podem consumir esta camada em vez de reimplementar
+  // a fusao de fontes. Por ora e exposta no resultado pra inspecao.
+  const speechActivity = buildSpeechActivity({ words, waveform, duration });
+
   throwIfAborted(signal);
   step("semantics");
   const semantic = await analyzeSemantics(words, { signal, onUsage });
@@ -105,7 +112,7 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   const zoomEvents = computeZoomEvents({ semantic, segments, profile });
   console.log("[pipeline] zoomEvents:", zoomEvents.length, zoomEvents);
 
-  return { words, waveform, semantic, narrative, edl, segments, profile, problemCandidates, zoomEvents };
+  return { words, waveform, speechActivity, semantic, narrative, edl, segments, profile, problemCandidates, zoomEvents };
 }
 
 export { STEPS as PIPELINE_STEPS };
