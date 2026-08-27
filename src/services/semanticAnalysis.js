@@ -78,6 +78,18 @@ Recebe abaixo uma lista de sentenças numeradas extraídas da fala de UM vídeo.
 5. "speechErrors": defeitos de fala CURTOS (até ~15 palavras cada) identificados dentro das sentenças recebidas. Formato:
    [{"sentenceIndex":N,"reason":"...","evidence":"trecho literal"}]
    Categorias válidas: "stutter", "filler", "false_start", "abandoned_phrase", "self_correction".
+
+   ATENÇÃO ESPECIAL a AUTOCORREÇÕES ("self_correction"):
+   Padrão: apresentador fala algo, percebe que está errado, e IMEDIATAMENTE corrige.
+   Ex: "tinha o maná e a lei... quer dizer, tinha a lei e o maná."
+   Ex: "eu vi na terça... não, quarta-feira."
+   Ex: "1929... digo, 1939."
+   Ex: "que floresceu ali. Então o que... o de arão que floresceu ali."
+   REGRA: quando você vir duas versões próximas de uma mesma frase onde a
+   segunda soa como uma CORREÇÃO da primeira (mesmo tema mas com detalhes
+   diferentes), MARQUE A PRIMEIRA como self_correction — ela é o erro.
+   Preferir marcar do que perder.
+
    Se NENHUM defeito claro existir, retorne [].
 
 REGRAS:

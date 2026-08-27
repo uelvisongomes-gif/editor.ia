@@ -1,8 +1,14 @@
 // Dead Air: gaps entre palavras + silêncio real ESCONDIDO dentro de
 // palavras esticadas (artefato do Whisper).
 
-const MIN_GAP = 0.7;
-const GAP_EDGE_MARGIN = 0.1;
+// Regras:
+//   gap < 1.5s   → PAUSA NATURAL entre frases. Não candidata.
+//   1.5-3s      → REVIEW (usuário decide se corta)
+//   >= 3s        → REMOVE (dead air óbvio)
+// Isso preserva pausas dramáticas de 1-2s que dão ritmo ao vídeo.
+const NATURAL_PAUSE_LIMIT = 1.5;
+const DEAD_AIR_LIMIT = 3.0;
+const GAP_EDGE_MARGIN = 0.15;
 
 const HIDDEN_SILENCE_LEVEL = 0.025;
 const HIDDEN_SILENCE_MIN_DUR = 0.5;
@@ -15,14 +21,17 @@ export function detectGapSilence({ words } = {}) {
     const w = words[i];
     const nx = words[i + 1];
     const gap = nx.start - w.end;
-    if (gap < MIN_GAP) continue;
+    if (gap < NATURAL_PAUSE_LIMIT) continue;
     const cutStart = w.end + GAP_EDGE_MARGIN;
     const cutEnd = nx.start - GAP_EDGE_MARGIN;
     if (cutEnd - cutStart < 0.3) continue;
+    // Dead air (>=3s) = alta confiança → REMOVE
+    // Pausa longa (1.5-3s) = média confiança → REVIEW
+    const conf = gap >= DEAD_AIR_LIMIT ? 0.90 : 0.70;
     out.push({
       start: cutStart,
       end: cutEnd,
-      confidence: 0.85,
+      confidence: conf,
       reason: "silence",
       source: "speechError",
       detectedBy: "heuristic",
@@ -76,8 +85,10 @@ export function detectHiddenSilence({ words, waveform } = {}) {
 
 export function detectSoundWithoutWord({ words, waveform } = {}) {
   if (!waveform?.length) return [];
-  const SOUND_LEVEL = 0.03;
-  const MIN_HESIT_DUR = 0.4;
+  // Threshold reduzido — "EEE" fraco que o Whisper dropa tem
+  // energia baixa mas presente. 0.02 pega mais casos reais.
+  const SOUND_LEVEL = 0.02;
+  const MIN_HESIT_DUR = 0.3;
   const wordCovers = (t) => words?.some((w) => t >= w.start - 0.05 && t < w.end + 0.05);
   const out = [];
   let winStart = null;
