@@ -11,9 +11,13 @@ export const STANDALONE_HESITATIONS = new Set([
   "veja", "vejam", "gente", "pessoal",
 ]);
 
+// Conectores que quando "pendurados" (sem completação) sinalizam frase
+// abandonada. NÃO inclui "e"/"mas"/"ou" — esses são discurso normal e
+// causam FP se tratados como marcadores de abandono ("mas o grande
+// problema é ..." não é abandono, é abertura legítima).
 export const HANGING_CONNECTORS = new Set([
   "porque", "quando", "como", "para", "pra", "que", "se",
-  "e", "ou", "mas", "pois", "porém", "todavia", "contudo",
+  "pois", "porém", "todavia", "contudo",
 ]);
 
 export const RESET_WORDS = new Set([

@@ -71,7 +71,7 @@ function score(fx, detected) {
       const bad = overlapping.filter((d) => d.action === "REMOVE");
       if (bad.length) {
         fp += bad.length;
-        details.push(`  ✗ FP: expected KEEP @${exp.startApprox}-${exp.endApprox} → cut ${bad.length} times (${bad.map(b => b.reason).join(", ")})`);
+        details.push(`  ✗ FP: expected KEEP @${exp.startApprox}-${exp.endApprox} → cortes: ${bad.map(b => `${b.reason}@${b.start.toFixed(2)}-${b.end.toFixed(2)}`).join(", ")}`);
       } else {
         details.push(`  ✓ KEEP: @${exp.startApprox}-${exp.endApprox} preserved`);
       }
