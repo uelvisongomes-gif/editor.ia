@@ -2523,7 +2523,7 @@ async function callMistakeDetectionAPI(words) {
                     return (
                       <button
                         key={tool.id}
-                        onClick={() => setActiveTool((cur) => (cur === tool.id ? null : tool.id))}
+                        onClick={() => setActiveTool((cur) => (cur === tool.id ? "smart" : tool.id))}
                         style={{
                           background: active ? "#FF6A2B" : "transparent",
                           color: active ? "#1A0A02" : "#F5F5F7",
