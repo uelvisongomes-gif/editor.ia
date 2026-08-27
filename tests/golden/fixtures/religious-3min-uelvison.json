@@ -1598,5 +1598,6 @@
       "expected": "REMOVE",
       "reason": "2:32-2:33 duas"
     }
-  ]
+  ],
+  "approximateExpectedCutCount": 6
 }

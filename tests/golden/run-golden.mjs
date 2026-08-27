@@ -50,7 +50,18 @@ function runFixture(fx) {
       reason: c.primaryType,
     }));
 
-  return { detected, candidates: problemCandidates.length };
+  return { detected, candidates: problemCandidates.length, decided: problemCandidates };
+}
+
+// Overcut score — se rendered_cuts >> approximateExpectedCutCount → FAIL.
+function scoreOvercut(fx, decided) {
+  const removeCount = decided.filter((c) => c.finalAction === "remove" || c.finalAction === "trim").length;
+  const durMin = (fx.durationSec || 60) / 60;
+  const cutsPerMin = (removeCount / durMin).toFixed(1);
+  const target = fx.approximateExpectedCutCount ?? null;
+  const passed = target == null ? null : removeCount <= target * 1.6;
+  const severelyOver = target != null && removeCount > target * 2.5;
+  return { removeCount, cutsPerMin, target, passed, severelyOver };
 }
 
 function score(fx, detected) {
@@ -97,18 +108,23 @@ function main() {
   }
 
   let totalTP = 0, totalFP = 0, totalFN = 0;
+  let anyOvercut = false;
   const results = [];
   for (const f of files) {
     const fx = JSON.parse(readFileSync(join(FIXTURES_DIR, f), "utf8"));
     console.log(`\n=== ${fx.name || f} ===`);
     console.log(fx.description || "");
-    const { detected, candidates } = runFixture(fx);
+    const { detected, candidates, decided } = runFixture(fx);
     console.log(`  candidatos detectados: ${candidates}, executados: ${detected.length}`);
+    const oc = scoreOvercut(fx, decided);
+    console.log(`  cortes: ${oc.removeCount}  (${oc.cutsPerMin}/min)  target~${oc.target ?? "n/a"}`);
+    if (oc.severelyOver) { console.log("  ✗ SEVERE_OVERCUTTING"); anyOvercut = true; }
+    else if (oc.passed === false) { console.log("  ⚠ OVERCUTTING (soft fail)"); }
     const { tp, fp, fn, details } = score(fx, detected);
     details.forEach((d) => console.log(d));
     console.log(`  TP=${tp} FP=${fp} FN=${fn}`);
     totalTP += tp; totalFP += fp; totalFN += fn;
-    results.push({ name: fx.name || f, tp, fp, fn });
+    results.push({ name: fx.name || f, tp, fp, fn, ...oc });
   }
 
   const total = totalTP + totalFN;
