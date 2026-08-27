@@ -1640,6 +1640,10 @@ async function callMistakeDetectionAPI(words) {
       setSelectedSegId(null);
       setSmartDone(true);
       setSmartStep("Edição inteligente pronta.");
+      // Ativa preview "video editado" automaticamente — timeline vira
+      // faixa contínua sem cortes visíveis. Usuário clica "Video original"
+      // pra voltar.
+      setPreviewMode(true);
     } catch (err) {
       if (err?.name === "AbortError") {
         setSmartStep("Análise cancelada.");
@@ -3448,7 +3452,16 @@ async function callMistakeDetectionAPI(words) {
                       <TrackLabel text="Cortes" />
                       <div className="absolute inset-0" style={{ paddingLeft: 46 }}>
                         <div className="relative w-full h-full" ref={timelineTrackRef}>
-                          {segments.map((seg) => {
+                          {previewMode ? (
+                            <div
+                              title="Vídeo editado — faixa contínua"
+                              style={{
+                                position: "absolute", left: 0, right: 0, top: 2, bottom: 2,
+                                background: "#378ADD", borderRadius: 4,
+                                border: "1px solid #0A0A0D",
+                              }}
+                            />
+                          ) : segments.map((seg) => {
                             let bg;
                             if (seg.action === "review") {
                               bg = "repeating-linear-gradient(45deg,#FFB020,#FFB020 4px,#7A5510 4px,#7A5510 8px)";
@@ -3510,7 +3523,7 @@ async function callMistakeDetectionAPI(words) {
                       <TrackLabel text="Legendas" />
                       <div className="absolute inset-0" style={{ paddingLeft: 46 }}>
                         <div className="relative w-full h-full">
-                          {captions.map((c) => (
+                          {(previewMode ? clippedCaptions : captions).map((c) => (
                             <div key={c.id} title={c.text} style={{
                               position: "absolute",
                               left: `${(c.start / duration) * 100}%`,
@@ -3532,7 +3545,9 @@ async function callMistakeDetectionAPI(words) {
                       <TrackLabel text="Zoom" />
                       <div className="absolute inset-0" style={{ paddingLeft: 46 }}>
                         <div className="relative w-full h-full">
-                          {smartZoomEnabled && zoomEvents.map((ev) => {
+                          {smartZoomEnabled && zoomEvents
+                            .filter((ev) => !previewMode || !segments.some((s) => s.deleted && ev.start >= s.start && ev.start < s.end))
+                            .map((ev) => {
                             const isOut = ev.mode === "zoom_out";
                             const isSelected = selectedZoomId === ev.id;
                             const levelSpec = ZOOM_LEVELS[ev.level] || {};
@@ -3608,7 +3623,7 @@ async function callMistakeDetectionAPI(words) {
                     </div>
 
                     {/* IA Aplicada: cut points + removed silence + zoom */}
-                    <div className="absolute left-0 right-0" style={{ top: 178, height: 18 }}>
+                    <div className="absolute left-0 right-0" style={{ top: 178, height: 18, display: previewMode ? "none" : "block" }}>
                       <TrackLabel text="IA" />
                       <div className="absolute inset-0" style={{ paddingLeft: 46 }}>
                         <div className="relative w-full h-full">
