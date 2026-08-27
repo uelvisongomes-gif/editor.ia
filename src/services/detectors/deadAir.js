@@ -13,10 +13,14 @@ const GAP_EDGE_MARGIN = 0.15;
 
 function thresholdForWord(word) {
   const raw = (word.word || "").trim();
-  if (/[.!?…]$/.test(raw)) return { removeAt: 3.0, reviewAt: 1.5 };
-  if (/,$/.test(raw)) return { removeAt: 2.0, reviewAt: 1.2 };
-  // Sem pontuação (mid-fala): 0.5s já sugere "ÉEE" esticado escondido
-  return { removeAt: 1.0, reviewAt: 0.5 };
+  // Pausa dramática entre frases (após .!?): manter até 6s, é INTENCIONAL
+  // em conteudo reflexivo/religioso/didático. Só remover se REALMENTE
+  // longa (>6s). Casos 2-6s viram REVIEW pro usuário decidir.
+  if (/[.!?…]$/.test(raw)) return { removeAt: 6.0, reviewAt: 2.5 };
+  // Pausa após vírgula: um pouco de respiro é ok, mas > 3s é dead air.
+  if (/,$/.test(raw)) return { removeAt: 3.0, reviewAt: 1.5 };
+  // Sem pontuação (mid-fala): pausa >= 1.5s dentro da mesma frase é ruim.
+  return { removeAt: 1.5, reviewAt: 0.7 };
 }
 
 const HIDDEN_SILENCE_LEVEL = 0.025;
