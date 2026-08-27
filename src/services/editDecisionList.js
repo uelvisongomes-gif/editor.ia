@@ -170,6 +170,7 @@ export const REASON_LABELS = {
   repeated_idea: "Ideia repetida",
   off_topic: "Fora do assunto",
   low_value: "Pouco relevante",
+  low_clarity: "Fala pouco clara — considere remover",
   trim_low_importance: "Encurtar",
   content: "Conteúdo mantido",
   manual: "Ajuste manual",
