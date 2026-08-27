@@ -87,12 +87,12 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
 
   throwIfAborted(signal);
   step("errors");
-  // Detecção UNIFICADA: heurística determinística + speech errors do LLM
-  // (agora vem embutido no analyzeSemantics, sem chamada LLM extra).
-  const heuristicErrors = detectSpeechErrorsHeuristic(words, { waveform });
-  const llmErrors = semantic?.speechErrors || [];
-  const speechErrors = [...heuristicErrors, ...llmErrors];
-  console.log("[pipeline] speechErrors — heuristic:", heuristicErrors.length, "llm:", llmErrors.length, "total:", speechErrors.length);
+  // Só heurística determinística. Speech errors do LLM foram desligados
+  // porque em teste real geravam MUITOS cortes desnecessários e
+  // poluíam a timeline. Heurística cobre: pre-roll, silêncios longos,
+  // "quer dizer" autocorreção, stutters, palavras esticadas.
+  const speechErrors = detectSpeechErrorsHeuristic(words, { waveform });
+  console.log("[pipeline] speechErrors (heuristic only):", speechErrors.length);
   console.log("[pipeline] semantic result:", {
     topic: semantic.topic,
     sentences: semantic.sentences.length,
