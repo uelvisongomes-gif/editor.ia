@@ -3169,14 +3169,26 @@ async function callMistakeDetectionAPI(words) {
                       bottom: { top: "92%", transform: "translate(-50%, -50%)" },
                     }[captionPosition] || { top: "92%", transform: "translate(-50%, -50%)" };
                     const text = captionStyle.uppercase ? activeCaption.text.toUpperCase() : activeCaption.text;
+                    // Emphasis: usa idx canonico da cue OU accentTarget (first/last)
+                    const emphasisIdx = Number.isInteger(activeCaption.emphasisWordIdx) && activeCaption.emphasisWordIdx >= 0
+                      ? activeCaption.emphasisWordIdx
+                      : (captionStyle.accentTarget === "first" ? 0 :
+                         captionStyle.accentTarget === "last" ? text.trim().split(/\s+/).length - 1 : -1);
+                    const words = text.trim().split(/\s+/);
+                    // Karaoke: em modo perWord, palavra ATUAL da fala vira active.
+                    let karaokeIdx = -1;
+                    if (captionStyle.perWord && activeCaption.words?.length) {
+                      const w = activeCaption.words.findIndex((wd) => currentTime >= wd.start && currentTime < wd.end);
+                      karaokeIdx = w;
+                    }
                     return (
                       <>
                         <div
                           className="absolute left-1/2 text-center"
                           style={{
                             ...posStyle,
-                            width: "92%",           // faixa larga — prioriza HORIZONTAL
-                            lineHeight: 1.15,       // compact line-height
+                            width: "92%",
+                            lineHeight: 1.15,
                           }}
                         >
                           <span
@@ -3186,7 +3198,7 @@ async function callMistakeDetectionAPI(words) {
                               fontWeight: captionStyle.weight,
                               fontFamily: captionStyle.fontFamily || "sans-serif",
                               fontStyle: captionStyle.italic ? "italic" : "normal",
-                              fontSize: `${1.05 * captionStyle.sizeScale}rem`, // maior — mais presente
+                              fontSize: `${1.05 * captionStyle.sizeScale}rem`,
                               letterSpacing: captionStyle.letterSpacing ? `${captionStyle.letterSpacing}em` : "normal",
                               WebkitTextStroke: captionStyle.strokeColor ? `${captionStyle.strokeWidth || 1.5}px ${captionStyle.strokeColor}` : undefined,
                               textShadow: captionStyle.shadow
@@ -3195,7 +3207,6 @@ async function callMistakeDetectionAPI(words) {
                               padding: (captionStyle.bg || captionStyle.bgGradient) ? "0.35em 0.7em" : 0,
                               borderRadius: (captionStyle.bg || captionStyle.bgGradient) ? (captionStyle.pillRadius ?? 8) : 0,
                               border: captionStyle.borderColor && captionStyle.borderWidth ? `${captionStyle.borderWidth}px solid ${captionStyle.borderColor}` : undefined,
-                              // HARD CAP 2 linhas (nunca 3+):
                               display: "-webkit-box",
                               WebkitBoxOrient: "vertical",
                               WebkitLineClamp: 2,
@@ -3205,7 +3216,32 @@ async function callMistakeDetectionAPI(words) {
                               overflowWrap: "break-word",
                             }}
                           >
-                            {text}
+                            {words.map((w, i) => {
+                              const isKaraoke = i === karaokeIdx;
+                              const isEmphasis = i === emphasisIdx && !captionStyle.perWord;
+                              const hasAccentBg = isEmphasis && captionStyle.accentBg;
+                              const hasAccentColor = isEmphasis && captionStyle.accentColor;
+                              const style = {};
+                              if (isKaraoke) {
+                                style.color = captionStyle.highlightColor || "#FDE047";
+                              } else if (hasAccentBg) {
+                                style.background = captionStyle.accentBg;
+                                style.color = captionStyle.accentTextColor || captionStyle.textColor;
+                                style.padding = "0.05em 0.25em";
+                                style.borderRadius = 4;
+                                style.marginLeft = 2;
+                                style.marginRight = 2;
+                                style.display = "inline-block";
+                              } else if (hasAccentColor) {
+                                style.color = captionStyle.accentColor;
+                              }
+                              return (
+                                <React.Fragment key={i}>
+                                  <span style={style}>{w}</span>
+                                  {i < words.length - 1 ? " " : ""}
+                                </React.Fragment>
+                              );
+                            })}
                           </span>
                         </div>
                       </>
