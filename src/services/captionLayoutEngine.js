@@ -96,12 +96,40 @@ export function buildCaptionsSmartly(words, opts = {}) {
     if (shouldClose) flush();
   }
 
-  // Move connectors finais da cue N pra INÍCIO da cue N+1 (evita cue órfã
-  // terminada em "e"/"o"/"que"/etc). Preserva todas as palavras.
+  // 1) Balance: se a última cue ficou órfã (< 3 palavras), puxa palavras
+  //    da cue anterior pra distribuir melhor. Evita "simples" sozinho.
+  balanceOrphanTails(cues, 3);
+
+  // 2) Shift connectors finais pra próxima cue (evita cue terminar em
+  //    "e"/"o"/"que"/etc). Preserva todas as palavras.
   shiftTrailingConnectors(cues);
 
-  // Merge cues muito curtas (< minDurationSec) pra evitar piscar.
+  // 3) Merge cues muito curtas (< minDurationSec) pra evitar piscar.
   return mergeShortCues(cues, cfg.minDurationSec);
+}
+
+function balanceOrphanTails(cues, minWordsPerCue) {
+  if (cues.length < 2) return;
+  // Faz múltiplas passadas — cada passada move 1 palavra por cue órfã.
+  for (let pass = 0; pass < 6; pass++) {
+    let changed = false;
+    for (let i = 1; i < cues.length; i++) {
+      const cur = cues[i];
+      const prev = cues[i - 1];
+      if (cur.words.length >= minWordsPerCue) continue;
+      if (prev.words.length <= minWordsPerCue) continue;
+      const w = prev.words.pop();
+      cur.words.unshift(w);
+      prev.text = prev.words.map((x) => x.word).join(" ");
+      prev.end = prev.words[prev.words.length - 1].end;
+      prev.emphasisWordIdx = pickEmphasisWordIndex(prev.words);
+      cur.text = cur.words.map((x) => x.word).join(" ");
+      cur.start = cur.words[0].start;
+      cur.emphasisWordIdx = pickEmphasisWordIndex(cur.words);
+      changed = true;
+    }
+    if (!changed) break;
+  }
 }
 
 function shiftTrailingConnectors(cues) {

@@ -178,9 +178,10 @@ const CAPTION_STYLES = [
 // Safe-area calibrada pra 9:16: UI do TikTok/Reels ocupa base ~18% e topo
 // ~10%. Legenda nunca gruda em borda.
 const CAPTION_Y_FRACTION = { bottom: 0.82, "middle-bottom": 0.70, top: 0.18, center: 0.5 };
-// Safe width — legenda ocupa 88% da largura útil. Prioridade HORIZONTAL:
-// cresce em largura antes de quebrar linha; nunca colada nas bordas.
-const CAPTION_SAFE_WIDTH_FRAC = 0.88;
+// Safe width — legenda ocupa 90% da largura ÚTIL DO VÍDEO (canvas.width,
+// não container). Prioridade HORIZONTAL: cresce em largura antes de
+// quebrar linha; nunca colada nas bordas.
+const CAPTION_SAFE_WIDTH_FRAC = 0.90;
 const CAPTION_FADE_SEC = 0.12;
 
 const TRANSITION_DURATION = 0.08; // 80ms — quase imperceptível, evita "escurecer" no zoom-cut
