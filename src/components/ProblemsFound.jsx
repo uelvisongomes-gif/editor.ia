@@ -95,7 +95,7 @@ export function ProblemsFound({ candidates, onPlay, onRemove, onKeep }) {
         })}
       </div>
 
-      <div className="flex flex-col gap-1.5 max-h-[540px] overflow-y-auto pr-1">
+      <div className="flex flex-col gap-1.5 max-h-[240px] overflow-y-auto pr-1">
         {items.length === 0 && (
           <p style={{ color: "#6B6B75" }} className="text-xs py-2 text-center">Nenhum item nesse filtro.</p>
         )}
@@ -121,30 +121,18 @@ export function ProblemsFound({ candidates, onPlay, onRemove, onKeep }) {
                       {labelReason(cand.primaryType)}
                     </span>
                     <span style={{ color: badgeBg }} className="text-[10px] font-bold uppercase">{statusLabel}</span>
-                    {cand.detectors?.map((d, i) => (
-                      <span key={i} style={{ background: "#1B1B21", color: "#9A9AA5" }}
-                        className="text-[9px] px-1.5 py-0.5 rounded" title={d.evidence}>
-                        {d.detector}
-                      </span>
-                    ))}
                   </div>
                   <div style={{ color: "#9A9AA5" }} className="text-[11px] tabular-nums mt-0.5">
                     {(cand.cutStart != null && cand.cutEnd != null &&
                       (Math.abs(cand.cutStart - cand.start) > 0.05 || Math.abs(cand.cutEnd - cand.end) > 0.05)) ? (
-                      <>
-                        <div><span style={{ color: "#6B6B75" }}>Analisado:</span> {formatTime(cand.start)} → {formatTime(cand.end)}</div>
-                        <div style={{ color: "#FFB0A0" }}>
-                          <span style={{ color: "#F09595" }}>Corte:</span> {formatTime(cand.cutStart)} → {formatTime(cand.cutEnd)}
-                          <span style={{ color: "#6B6B75" }}> · {(cand.cutEnd - cand.cutStart).toFixed(1)}s</span>
-                        </div>
-                        {cand.boundaryNote && (
-                          <div style={{ color: "#6B6B75" }} className="text-[10px]">Refinado por: {cand.boundaryNote}</div>
-                        )}
-                      </>
+                      <div style={{ color: "#FFB0A0" }}>
+                        {formatTime(cand.cutStart)} → {formatTime(cand.cutEnd)}
+                        <span style={{ color: "#6B6B75" }}> · {(cand.cutEnd - cand.cutStart).toFixed(1)}s</span>
+                      </div>
                     ) : (
                       <>
                         {formatTime(cand.start)} → {formatTime(cand.end)}
-                        <span style={{ color: "#6B6B75" }}> · {(cand.end - cand.start).toFixed(1)}s · conf {Math.round((cand.confidence || 0) * 100)}%</span>
+                        <span style={{ color: "#6B6B75" }}> · {(cand.end - cand.start).toFixed(1)}s</span>
                       </>
                     )}
                   </div>
@@ -164,38 +152,14 @@ export function ProblemsFound({ candidates, onPlay, onRemove, onKeep }) {
                       <ShieldAlert size={11} /> Context Guard: {labelContextGuard(cand.contextGuardReason)}
                     </div>
                   )}
-                  {cand.blockedReasons?.length > 0 && (
-                    <div className="mt-1.5">
-                      <p style={{ color: "#FFB020" }} className="text-[10px] font-bold uppercase mb-0.5">Por que não foi cortado:</p>
-                      {cand.blockedReasons.map((r, i) => (
-                        <p key={i} style={{ color: "#C9C9D1" }} className="text-[10px]">• {labelBlocked(r)}</p>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
               <div className="flex items-center gap-1.5 mt-2 justify-end flex-wrap">
-                {(cand.cutStart != null && cand.cutEnd != null &&
-                  (Math.abs(cand.cutStart - cand.start) > 0.05 || Math.abs(cand.cutEnd - cand.end) > 0.05)) ? (
-                  <>
-                    <button onClick={() => onPlay?.(cand.start, cand.end)}
-                      style={{ background: "#1B1B21", color: "#C9C9D1" }}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold">
-                      <Play size={11} /> Região
-                    </button>
-                    <button onClick={() => onPlay?.(cand.cutStart, cand.cutEnd)}
-                      style={{ background: "#1B1B21", color: "#F09595" }}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold">
-                      <Play size={11} /> Corte
-                    </button>
-                  </>
-                ) : (
-                  <button onClick={() => onPlay?.(cand.start, cand.end)}
-                    style={{ background: "#1B1B21", color: "#C9C9D1" }}
-                    className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold">
-                    <Play size={11} /> Ouvir
-                  </button>
-                )}
+                <button onClick={() => onPlay?.(cand.cutStart ?? cand.start, cand.cutEnd ?? cand.end)}
+                  style={{ background: "#1B1B21", color: "#C9C9D1" }}
+                  className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold">
+                  <Play size={11} /> Ouvir
+                </button>
                 <button onClick={() => onRemove?.(cand)}
                   style={{ background: "#5A2A1E", color: "#FFB0A0" }}
                   className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold">
