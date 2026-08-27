@@ -907,8 +907,10 @@ export default function AiVideoEditor() {
   const [colorAdjust, setColorAdjust] = useState({ brightness: 100, contrast: 100, saturate: 100 });
   // Volumes independentes por track. `volume` fica como "fala" (do vídeo).
   const [volume, setVolume] = useState(1);              // fala (áudio do vídeo)
-  const [musicVolume, setMusicVolume] = useState(0.35); // música de fundo
-  const [ambientVolume, setAmbientVolume] = useState(0.20); // ambiente/ruído
+  // Referência do usuário: se voz=10, música=2.5-3 (padrão 2.8) — mantém
+  // fala nítida sem música competir. Auto ajusta ao selecionar.
+  const [musicVolume, setMusicVolume] = useState(0.28);
+  const [ambientVolume, setAmbientVolume] = useState(0.15);
   const [selectedMusicId, setSelectedMusicId] = useState(null);
   // Track completo — cobre uploads e resultados remotos que não estão
   // no catálogo local. Se null cai no getMusicById(catálogo).
@@ -918,6 +920,11 @@ export default function AiVideoEditor() {
   const handleMusicSelect = (id, track) => {
     setSelectedMusicId(id);
     setSelectedMusicTrack(id ? (track || null) : null);
+    // Ao selecionar nova música, reajusta volume pra ratio ideal ~28%
+    // da voz (2.8:10) — voz nítida sem música competir. Se o usuário já
+    // ajustou pra >0.5 (queria alta), respeita.
+    if (id && musicVolume > 0.5) return;
+    if (id) setMusicVolume(0.28);
   };
 
   const [videoTypeId, setVideoTypeId] = useState("vendas");
@@ -3869,23 +3876,6 @@ async function callMistakeDetectionAPI(words) {
                 />
               </Panel>
 
-              <div style={{ background: "#131318", border: "1px solid #1F1F26" }} className="rounded-xl p-3.5">
-                <span
-                  style={{ background: "#FF6A2B", color: "#1A0A02" }}
-                  className="inline-block text-xs font-bold px-2.5 py-1 rounded-md mb-3"
-                >
-                  ESTATÍSTICAS
-                </span>
-                <StatRow label="Duração original" value={formatTime(duration)} />
-                <StatRow label="Duração final" value={formatTime(finalDuration)} />
-                <StatRow label="Redução" value={`${Math.max(0, reductionPct)}%`} />
-                <StatRow label="Resolução de saída" value={resolution} />
-                <StatRow label="Cortes aplicados" value={cutsApplied} />
-                <StatRow label="Trechos removidos" value={removedCount} />
-                <StatRow label="Legendas geradas" value={captions.length} />
-                <StatRow label="Cor ajustada" value={colorIsAdjusted ? "Sim" : "Padrão"} />
-                <QualityGauge score={qualityScore} label={qualityLabel} />
-              </div>
             </div>
           </div>
         )}
