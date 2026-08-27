@@ -8,6 +8,51 @@ import {
   HANGING_CONNECTORS, RESET_WORDS, RESTART_MARKERS, endsSentenceHard,
 } from "./_shared.js";
 
+// Marcadores explícitos de autocorreção: "quer dizer", "digo",
+// "melhor dizendo", "ou seja". Diferente do restart normal — corta
+// um trecho CURTO antes do marcador (3s ≈ a frase errada), não a
+// sentença inteira.
+const AUTOCORRECT_MARKERS = [
+  ["quer", "dizer"], ["digo"], ["melhor", "dizendo"], ["ou", "seja"],
+];
+
+export function detectAutocorrectMarkers({ words, norm } = {}) {
+  const n = norm || (words || []).map((w) => normalize(w.word));
+  const out = [];
+  for (let i = 0; i < words.length; i++) {
+    for (const marker of AUTOCORRECT_MARKERS) {
+      if (i + marker.length > words.length) continue;
+      let match = true;
+      for (let k = 0; k < marker.length; k++) {
+        if (n[i + k] !== marker[k]) { match = false; break; }
+      }
+      if (!match) continue;
+      // Cut de 3 segundos antes do marcador até o fim do marcador.
+      // Boundary alinhada com palavra.
+      const markerEnd = words[i + marker.length - 1].end;
+      const startTargetTime = words[i].start - 3.0;
+      // Encontra a palavra mais próxima >= startTargetTime
+      let startIdx = i;
+      while (startIdx > 0 && words[startIdx - 1].start >= startTargetTime) startIdx -= 1;
+      const start = words[startIdx].start;
+      const end = markerEnd + 0.05;
+      const span = end - start;
+      if (span >= 0.8 && span <= 6.0) {
+        out.push({
+          start, end,
+          confidence: 0.82,
+          reason: "self_correction",
+          source: "speechError",
+          detectedBy: "heuristic",
+          text: `(autocorreção "${words.slice(startIdx, i + marker.length).map(w => w.word).join(" ")}")`,
+        });
+      }
+      break;
+    }
+  }
+  return out;
+}
+
 export function detectRestartMarkers({ words, norm } = {}) {
   const n = norm || (words || []).map((w) => normalize(w.word));
   const out = [];

@@ -32,12 +32,18 @@ export const CONNECTOR_BEFORE_STUTTER = new Set([
 
 export const RESTART_MARKERS = [
   ["não", "pera"], ["não", "espera"], ["não", "peraí"],
-  ["pera", "aí"], ["peraí"], ["não", "é"],
+  ["pera", "aí"], ["peraí"],
+  // ["não", "é"] removido — pattern "X não é Y" é conteúdo legítimo comum
+  // ("Revelação não é saber de tudo") e causava FP.
   ["deixa", "eu", "ver"], ["deixa", "eu", "pensar"], ["deixa", "eu", "refazer"],
   ["esquece", "isso"], ["esquece", "o", "que"],
   ["vou", "refazer"], ["vamos", "de", "novo"],
   ["vou", "começar", "de", "novo"], ["vou", "recomeçar"], ["recomeça"],
   ["ai", "meu", "deus"], ["puta", "que", "pariu"], ["caraca"],
+  // Marcadores explícitos de autocorreção — apresentador diz algo,
+  // percebe o erro e sinaliza "quer dizer" / "digo" / "melhor dizendo"
+  // antes da versão correta.
+  ["quer", "dizer"], ["digo"], ["melhor", "dizendo"], ["ou", "seja"],
 ];
 
 export const ELONG_FILLERS = new Set([

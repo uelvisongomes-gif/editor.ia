@@ -14,7 +14,7 @@ import { normalize } from "./_shared.js";
 // suspeita. Cobre conectores ("da", "de"), pronomes ("isso", "essa"),
 // numerais curtos ("duas", "três"), etc. Confia no heurístico
 // "palavra curta demora ~200-400ms" — 1.7s é 5x isso.
-const MIN_STRETCH_DUR = 1.7;
+const MIN_STRETCH_DUR = 1.5;
 const MAX_SHORT_LEN = 5;
 const MARGIN = 0.15;
 

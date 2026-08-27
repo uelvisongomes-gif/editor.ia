@@ -51,6 +51,13 @@ export function detectLowClarity({ words } = {}) {
     const isSuspect = dur < TINY_DUR || nextCollapsed;
 
     if (isSuspect) {
+      // Se palavra suspeita anterior está muito distante (>0.5s), fecha
+      // run e começa outro — evita agrupar "Cristo. [pausa] Cristo"
+      // como uma única fala confusa quando na verdade são duas palavras
+      // separadas com timings zoados do Whisper.
+      if (runStart != null && (w.start - runEnd) > 0.5) {
+        flushRun();
+      }
       if (runStart == null) runStart = w.start;
       runEnd = w.end;
       runWords.push(w);

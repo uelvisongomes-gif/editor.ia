@@ -8,7 +8,7 @@ import { detectPreRoll } from "./detectors/preRoll.js";
 import { detectGapSilence, detectHiddenSilence, detectSoundWithoutWord } from "./detectors/deadAir.js";
 import { detectWordRepeat, detectBigramStutter } from "./detectors/stutter.js";
 import { detectFillerChain, detectElongatedHesitation, detectStandaloneHesitation } from "./detectors/filler.js";
-import { detectRestartMarkers, detectHangingConnectorAbandon, detectSentenceHeadRepeat } from "./detectors/falseStart.js";
+import { detectRestartMarkers, detectHangingConnectorAbandon, detectSentenceHeadRepeat, detectAutocorrectMarkers } from "./detectors/falseStart.js";
 import { detectLowClarity } from "./detectors/lowClarity.js";
 import { detectStretchedWord } from "./detectors/stretchedWord.js";
 
@@ -36,5 +36,6 @@ export function detectSpeechErrorsHeuristic(words, { waveform } = {}) {
     ...detectSentenceHeadRepeat(ctx),
     ...detectLowClarity(ctx),
     ...detectStretchedWord(ctx),
+    ...detectAutocorrectMarkers(ctx),
   ];
 }

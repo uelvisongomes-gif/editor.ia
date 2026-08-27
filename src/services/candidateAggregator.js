@@ -92,6 +92,17 @@ export function detectEnumerationSpans(sentences, words = []) {
         if (!last || words[idx].start - words[last].start >= 0.5) spaced.push(idx);
       }
       if (spaced.length >= 3) {
+        // Requisito extra: enumeração RETÓRICA tem itens CURTOS entre
+        // âncoras (tipo "falta ideia, falta jeito" — 1 palavra). Se as
+        // âncoras estão longe umas das outras com muito conteúdo no
+        // meio (tipo "revelação... [10 palavras] ... revelação..."),
+        // NÃO é enumeração — é palavra reaparecendo no discurso.
+        let maxWordsBetween = 0;
+        for (let k = 1; k < spaced.length; k++) {
+          const gap = spaced[k] - spaced[k - 1] - 1; // palavras entre
+          if (gap > maxWordsBetween) maxWordsBetween = gap;
+        }
+        if (maxWordsBetween > 3) { i = spaced[spaced.length - 1]; continue; }
         const firstIdx = spaced[0];
         const lastIdx = spaced[spaced.length - 1];
         const totalSpan = words[lastIdx].start - words[firstIdx].start;

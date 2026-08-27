@@ -778,7 +778,9 @@ export default function AiVideoEditor() {
   // Ref pra drag state
   const zoomDragRef = useRef(null);
   // Toggle "Zoom automático" na Edição Inteligente. Padrão ON.
-  const [smartZoomEnabled, setSmartZoomEnabled] = useState(true);
+  // Desligado por padrão — foco em edição/corte. Usuário liga manualmente
+  // quando os cortes estiverem prontos.
+  const [smartZoomEnabled, setSmartZoomEnabled] = useState(false);
   // Legendas automáticas
   const [autoCaptionsEnabled, setAutoCaptionsEnabled] = useState(false);
   const [captionStylePreset, setCaptionStylePreset] = useState("classico");
