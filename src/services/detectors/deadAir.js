@@ -15,7 +15,8 @@ function thresholdForWord(word) {
   const raw = (word.word || "").trim();
   if (/[.!?…]$/.test(raw)) return { removeAt: 3.0, reviewAt: 1.5 };
   if (/,$/.test(raw)) return { removeAt: 2.0, reviewAt: 1.2 };
-  return { removeAt: 1.0, reviewAt: 0.7 };
+  // Sem pontuação (mid-fala): 0.5s já sugere "ÉEE" esticado escondido
+  return { removeAt: 1.0, reviewAt: 0.5 };
 }
 
 const HIDDEN_SILENCE_LEVEL = 0.025;

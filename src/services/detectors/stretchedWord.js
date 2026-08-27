@@ -10,12 +10,15 @@
 
 import { normalize } from "./_shared.js";
 
-// Regra ampla: QUALQUER palavra curta (≤ 5 chars) esticada > 1.7s é
-// suspeita. Cobre conectores ("da", "de"), pronomes ("isso", "essa"),
-// numerais curtos ("duas", "três"), etc. Confia no heurístico
-// "palavra curta demora ~200-400ms" — 1.7s é 5x isso.
-const MIN_STRETCH_DUR = 1.5;
-const MAX_SHORT_LEN = 5;
+// Regras de dur/comprimento:
+//   - Palavras curtas (≤5 chars): >1.5s é suspeito
+//     ("da","de","é","que","o" tocam ~200-400ms normal — 1.5s é 4x isso).
+//   - Palavras médias/longas (>5 chars): >1.7s é suspeito
+//     (pega "mediador" 1.74s, "sacrificar" 2.06s — casos reais de
+//      emphasize "ÉEE" que Whisper baked into a palavra vizinha).
+const MIN_STRETCH_SHORT = 1.5;
+const MIN_STRETCH_LONG = 1.7;
+const SHORT_LEN_CUTOFF = 5;
 const MARGIN = 0.15;
 
 export function detectStretchedWord({ words } = {}) {
@@ -23,10 +26,10 @@ export function detectStretchedWord({ words } = {}) {
   const out = [];
   for (const w of words) {
     const raw = normalize(w.word);
-    if (raw.length > MAX_SHORT_LEN) continue;
     if (raw.length === 0) continue;
     const dur = w.end - w.start;
-    if (dur < MIN_STRETCH_DUR) continue;
+    const threshold = raw.length <= SHORT_LEN_CUTOFF ? MIN_STRETCH_SHORT : MIN_STRETCH_LONG;
+    if (dur < threshold) continue;
     const start = w.start + MARGIN;
     const end = w.end - MARGIN;
     if (end - start < 0.5) continue;
