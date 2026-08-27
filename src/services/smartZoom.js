@@ -40,44 +40,15 @@ export function effectiveScale(conceptualScale) {
   return Math.max(1.0, eff);
 }
 
-const ROLE_WEIGHT = {
-  point: 1.0,
-  cta: 0.95,
-  conclusion: 0.75,
-  hook: 0.45,
-  development: 0.35,
-  context: 0.20,
-  aside: 0,
-  off_topic: 0,
-};
-const IMPORTANCE_WEIGHT = { high: 1.0, medium: 0.55, low: 0.15 };
+import { IMPACT_MARKERS, computeEmphasis } from "./emphasisModel.js";
 
-// Palavras que reforçam "momento de impacto" — ganham zoom mais forte.
-const IMPACT_MARKERS = [
-  "olha", "veja", "atenção", "cuidado", "nunca", "sempre",
-  "revelação", "segredo", "descobri", "aconteceu", "resultado",
-  "antes", "depois", "mas", "porém", "surpresa", "impressionante",
-  "único", "só existe", "impossível", "imperdível",
-];
-const EMPHASIS_MARKERS = [
-  "importante", "essencial", "principal", "fundamental", "crítico",
-  "muito", "problema", "solução", "resposta",
-];
 function normalize(s) { return (s || "").toLowerCase(); }
 
-function scoreSentence(sentence) {
-  const role = ROLE_WEIGHT[sentence.role] ?? 0.3;
-  const imp = IMPORTANCE_WEIGHT[sentence.importance] ?? 0.5;
-  let base = role * 0.55 + imp * 0.45;
-  const text = normalize(sentence.text);
-  const emphHits = EMPHASIS_MARKERS.filter((m) => text.includes(m)).length;
-  const impactHits = IMPACT_MARKERS.filter((m) => text.includes(m)).length;
-  if (emphHits > 0) base += Math.min(0.20, emphHits * 0.07);
-  if (impactHits > 0) base += Math.min(0.25, impactHits * 0.10);
-  const wc = text.split(/\s+/).filter(Boolean).length;
-  if (wc < 4) base -= 0.30;
-  if (wc > 35) base -= 0.15;
-  return Math.max(0, Math.min(1, base));
+// Lê emphasisScore canônico da sentence, se disponível. Fallback: calcula
+// on-the-fly usando o mesmo modelo (mantém compat com fixtures/testes).
+function sentenceScore(sentence) {
+  if (typeof sentence.emphasisScore === "number") return sentence.emphasisScore;
+  return computeEmphasis(sentence).score;
 }
 
 // Decide o nível (light/medium/strong) baseado no score e no papel.
@@ -201,7 +172,7 @@ export function computeZoomEvents({ semantic, segments, profile }) {
       const candidates = sentences
         .filter((s) => s.start >= searchFrom && s.start < searchTo)
         .filter((s) => inActiveSegment(s.start + 0.15))
-        .map((s) => ({ s, score: scoreSentence(s) }))
+        .map((s) => ({ s, score: sentenceScore(s) }))
         .filter(({ score }) => score >= 0.35)
         .sort((a, b) => b.score - a.score);
       if (!candidates.length) continue;

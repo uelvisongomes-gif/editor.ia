@@ -18,6 +18,8 @@ import { buildEDL } from "./editDecisionList.js";
 import { compileTimeline } from "./timelineCompilation.js";
 import { getProfile } from "./editingProfiles.js";
 import { computeZoomEvents } from "./smartZoom.js";
+import { checkEditingIntegrity } from "./editingIntegrityCheck.js";
+import { buildDebugReport } from "./editingDebugReport.js";
 
 const STEPS = {
   transcribe: "Transcrevendo o áudio...",
@@ -112,7 +114,18 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   const zoomEvents = computeZoomEvents({ semantic, segments, profile });
   console.log("[pipeline] zoomEvents:", zoomEvents.length, zoomEvents);
 
-  return { words, waveform, speechActivity, semantic, narrative, edl, segments, profile, problemCandidates, zoomEvents };
+  // Integrity check + debug report (determinístico, zero LLM).
+  const integrity = checkEditingIntegrity({ segments, zoomEvents, duration });
+  const debugReport = buildDebugReport({ segments, zoomEvents, integrity, duration });
+  if (integrity.summary.errors) {
+    console.warn("[pipeline] integrity errors:", integrity.errors);
+  }
+  console.log("[pipeline] integrity summary:", integrity.summary);
+
+  return {
+    words, waveform, speechActivity, semantic, narrative, edl, segments, profile,
+    problemCandidates, zoomEvents, integrity, debugReport,
+  };
 }
 
 export { STEPS as PIPELINE_STEPS };

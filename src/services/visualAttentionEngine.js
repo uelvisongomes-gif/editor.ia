@@ -102,3 +102,42 @@ function pickTypeForContext(role, timeline, atSec) {
   if (role === "point" || role === "cta") return "ZOOM_IN";
   return "CAPTION_EMPHASIS";
 }
+
+/**
+ * Density Guard — retorna quantos estímulos visuais estão ativos em t.
+ * Consumidores (smartZoom, futuro captionEmphasis, B-roll) checam ANTES
+ * de emitir um novo estímulo pra evitar poluição (3+ ao mesmo tempo).
+ *
+ * @param {number} t                    - timestamp em segundos
+ * @param {object} args
+ * @param {Array} args.segments         - segments compilados
+ * @param {Array} args.zoomEvents       - zoomEvents
+ * @param {Array} args.captionEvents    - legendas planejadas
+ * @param {number} [args.cutRecencyWin] - janela pra considerar corte "ativo" (default 1.5s)
+ * @returns {{level:"LOW"|"NORMAL"|"HIGH", count:number, active:string[]}}
+ */
+export function getDensityAt(t, { segments = [], zoomEvents = [], captionEvents = [], cutRecencyWin = 1.5 } = {}) {
+  const active = [];
+
+  // Corte recente (segment ativo começa nos últimos cutRecencyWin segundos)
+  const activeSegs = segments.filter((s) => !s.deleted && s.action !== "review" && s.action !== "trim")
+                             .sort((a, b) => a.start - b.start);
+  for (let i = 1; i < activeSegs.length; i++) {
+    const cutT = activeSegs[i].start;
+    if (t >= cutT && t <= cutT + cutRecencyWin) { active.push("CUT"); break; }
+  }
+
+  // Zoom ativo em t
+  if (zoomEvents.some((z) => t >= z.start - (z.fadeIn || 0) && t <= z.end + (z.fadeOut || 0))) {
+    active.push("ZOOM");
+  }
+
+  // Caption com word-emphasis ativo em t (só highlight, não caption normal)
+  if (captionEvents.some((c) => c.hasEmphasis && t >= c.start && t <= c.end)) {
+    active.push("CAPTION_EMPHASIS");
+  }
+
+  const count = active.length;
+  const level = count >= 3 ? "HIGH" : count >= 2 ? "NORMAL" : "LOW";
+  return { level, count, active };
+}

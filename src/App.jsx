@@ -11,6 +11,7 @@ import { runEditingPipeline } from "./services/pipeline.js";
 import { EDITING_PROFILES, DEFAULT_PROFILE_ID } from "./services/editingProfiles.js";
 import { EdlReview } from "./components/EdlReview.jsx";
 import { ProblemsFound } from "./components/ProblemsFound.jsx";
+import { IntegrityAndTimelineDebug } from "./components/IntegrityAndTimelineDebug.jsx";
 import { AuthGate } from "./components/AuthGate.jsx";
 import { createHistory, pushState, undo as undoHistory, redo as redoHistory, canUndo, canRedo } from "./services/edlHistory.js";
 import { createUsageLog, addUsageEntry, summarizeUsage } from "./services/usageLog.js";
@@ -766,6 +767,9 @@ export default function AiVideoEditor() {
   const [problemCandidates, setProblemCandidates] = useState([]);
   const [narrativeTopic, setNarrativeTopic] = useState("");
   const [zoomEvents, setZoomEvents] = useState([]);
+  // Integrity check + debug report — expostos pelo pipeline.
+  const [integrityReport, setIntegrityReport] = useState(null);
+  const [debugTimelineReport, setDebugTimelineReport] = useState(null);
   // Seleção de zoom para edição (excluir/redimensionar/mover/nível).
   const [selectedZoomId, setSelectedZoomId] = useState(null);
   // Ref pra drag state
@@ -1403,6 +1407,8 @@ async function callMistakeDetectionAPI(words) {
       setEdl(result.edl);
       setProblemCandidates(result.problemCandidates || []);
       setZoomEvents(result.zoomEvents || []);
+      setIntegrityReport(result.integrity || null);
+      setDebugTimelineReport(result.debugReport || null);
       setNarrativeTopic(result.semantic.topic || "");
       // Se legendas automáticas ligadas, gera direto do word timestamps
       // sem call LLM extra.
@@ -3411,6 +3417,10 @@ async function callMistakeDetectionAPI(words) {
                     onPlay={handlePlayRange}
                     onRemove={(cand) => applyCandidateDecision(cand, true)}
                     onKeep={(cand) => applyCandidateDecision(cand, false)}
+                  />
+                  <IntegrityAndTimelineDebug
+                    integrity={integrityReport}
+                    debugReport={debugTimelineReport}
                   />
                 </Panel>
               )}

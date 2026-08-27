@@ -9,6 +9,7 @@
 // latest is the "cta/conclusion".
 
 import { callLLM, extractJSON } from "./llmClient.js";
+import { enrichWithEmphasis } from "./emphasisModel.js";
 
 const CHUNK_SENTENCES = 90;
 
@@ -234,11 +235,16 @@ export async function analyzeSemantics(words, { signal, onUsage } = {}) {
     if (last.role === "development") last.role = "conclusion";
   }
 
+  // Enriquece com emphasisScore/emphasisTier/emphasisReasons (determinístico).
+  // Reutilizado por smartZoom, visualAttentionEngine e futuros módulos —
+  // evita recálculo em cada lugar.
+  const scored = enrichWithEmphasis(enriched);
+
   // Converte speechErrors {sentenceIndex, reason, evidence} para
   // {start, end, reason, confidence, text, detectedBy} usando as bordas
   // da sentença correspondente. Confidence fixa 0.8 (o heurístico já
   // captura casos evidentes com conf > 0.85).
-  const byIdx = new Map(enriched.map((s) => [s.index, s]));
+  const byIdx = new Map(scored.map((s) => [s.index, s]));
   const speechErrors = [];
   for (const e of speechErrorsRaw) {
     const s = byIdx.get(e.sentenceIndex);
@@ -260,7 +266,7 @@ export async function analyzeSemantics(words, { signal, onUsage } = {}) {
 
   return {
     topic,
-    sentences: enriched,
+    sentences: scored,
     repeatedGroups,
     offTopicIndexes: [...offTopicIndexes],
     speechErrors,
