@@ -2520,6 +2520,12 @@ async function callMistakeDetectionAPI(words) {
                   {TOOLS.map((tool) => {
                     const Icon = tool.icon;
                     const active = activeTool === tool.id;
+                    // "Pronta" quando ha config valida guardada em cada ferramenta
+                    const ready =
+                      (tool.id === "smart" && (smartZoomEnabled || autoCaptionsEnabled || edl.length > 0)) ||
+                      (tool.id === "color" && colorIsAdjusted) ||
+                      (tool.id === "music" && !!selectedMusicId) ||
+                      (tool.id === "volume" && (volume !== 1 || musicVolume !== 0.28));
                     return (
                       <button
                         key={tool.id}
@@ -2528,11 +2534,15 @@ async function callMistakeDetectionAPI(words) {
                           background: active ? "#FF6A2B" : "transparent",
                           color: active ? "#1A0A02" : "#F5F5F7",
                         }}
-                        className="flex items-start gap-2.5 p-2.5 rounded-lg text-left transition-colors"
+                        className="flex items-start gap-2.5 p-2.5 rounded-lg text-left transition-colors relative"
                       >
                         <Icon size={16} className="mt-0.5 flex-shrink-0" />
-                        <span>
-                          <span className="block text-sm font-medium">{tool.label}</span>
+                        <span className="flex-1">
+                          <span className="block text-sm font-medium">
+                            {tool.label}
+                            {ready && !active && <span style={{ color: "#5DCAA5" }} className="ml-1.5 text-[10px]">●</span>}
+                            {ready && active && <span style={{ color: "#1F3C2A" }} className="ml-1.5 text-[10px]">✓</span>}
+                          </span>
                           <span style={{ color: active ? "#4A2410" : "#9A9AA5" }} className="block text-xs">{tool.desc}</span>
                         </span>
                       </button>
@@ -2637,7 +2647,8 @@ async function callMistakeDetectionAPI(words) {
                               onClick={() => {
                                 setCaptionStylePreset(s.id);
                                 setCaptionStyleId(s.id);
-                                setCaptionStyleGridOpen(false);
+                                // Mantém o grid aberto pra o usuário ver que ficou
+                                // pronto e continuar interagindo (Zoom/Legenda/Posicao).
                               }}
                               style={{
                                 background: active ? "#2A1B10" : "#0F0F13",
