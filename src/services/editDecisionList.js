@@ -17,15 +17,12 @@
 // só a EDL (timeline), só os candidates (painel de diagnóstico), ou os dois.
 
 import { collectCandidates } from "./candidateAggregator.js";
-import { decideAll } from "./decisionEngine.js";
+import { decideAll, applySafetyValidators } from "./decisionEngine.js";
 
 let _idCounter = 1;
 const nextId = () => "edl-" + _idCounter++;
 
 const EPSILON = 0.02;
-const MAX_CONSECUTIVE_REMOVE_DUR = 12;
-const MIN_OPENING_KEEP_DUR = 0.4;
-const MIN_CLOSING_KEEP_DUR = 0.4;
 
 /**
  * @returns {{edl: Array, problemCandidates: Array}}
@@ -159,50 +156,8 @@ function collapseTinyKeeps(items) {
   return result;
 }
 
-function applySafetyValidators(items, { duration }) {
-  if (!items.length) return items;
-
-  // Exceção: hesitação/muleta/stutter no INÍCIO do vídeo é EXATAMENTE o
-  // que a gente quer cortar — o vídeo começa limpo, no conteúdo real.
-  // O "abrupt_open" só se aplica se o corte inicial for conteúdo (repeated
-  // idea, off_topic) ou algo grande demais pra ser considerado só travada.
-  const OPENING_CUT_REASONS_SAFE = new Set(["filler", "stutter", "false_start", "abandoned_phrase", "long_pause", "silence", "no_speech"]);
-  const openingIsHesitation = (it) => OPENING_CUT_REASONS_SAFE.has(it.reason) && (it.end - it.start) <= 4.0;
-
-  if (items[0].action !== "keep") {
-    if (!openingIsHesitation(items[0])) {
-      items[0] = { ...items[0], action: "review", safety: "abrupt_open" };
-    }
-  } else if (items[0].end - items[0].start < MIN_OPENING_KEEP_DUR && items[1]?.action !== "keep") {
-    if (!openingIsHesitation(items[1])) {
-      items[1] = { ...items[1], action: "review", safety: "abrupt_open" };
-    }
-  }
-
-  const last = items[items.length - 1];
-  if (last.action !== "keep") {
-    items[items.length - 1] = { ...last, action: "review", safety: "abrupt_close" };
-  } else if (last.end - last.start < MIN_CLOSING_KEEP_DUR && items.length >= 2 && items[items.length - 2].action !== "keep") {
-    const idx = items.length - 2;
-    items[idx] = { ...items[idx], action: "review", safety: "abrupt_close" };
-  }
-
-  let streakDur = 0;
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i];
-    if (it.action === "remove" || it.action === "trim") {
-      streakDur += it.end - it.start;
-      if (streakDur > MAX_CONSECUTIVE_REMOVE_DUR) {
-        items[i] = { ...it, action: "review", safety: "long_removal_streak" };
-        streakDur = 0;
-      }
-    } else {
-      streakDur = 0;
-    }
-  }
-
-  return items;
-}
+// applySafetyValidators foi movido para decisionEngine.js — safety é
+// decisão (turn remove→review), não construção de EDL.
 
 // Labels pt-BR usadas na UI. Nomes internos nunca vão pro usuário.
 export const REASON_LABELS = {
