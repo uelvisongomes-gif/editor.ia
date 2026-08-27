@@ -11,11 +11,11 @@ import { IMPACT_MARKERS, EMPHASIS_MARKERS } from "./emphasisModel.js";
 // -----------------------------------------------------------------------
 const DEFAULTS = {
   minWords: 2,
-  targetWords: 4,        // sweet spot pra leitura rápida
-  maxWords: 6,           // hard cap
+  targetWords: 5,        // sweet spot: dá pra caber em 1 linha larga
+  maxWords: 8,           // hard cap — prioriza HORIZONTAL, não empilha
   minDurationSec: 0.8,   // abaixo disso a cue "pisca"
-  maxDurationSec: 3.5,   // acima disso a legenda fica "velha" na tela
-  naturalBreakGapSec: 0.35, // pausa >= isso vira quebra
+  maxDurationSec: 3.8,   // acima disso a legenda fica "velha" na tela
+  naturalBreakGapSec: 0.45, // exige pausa mais clara pra fechar cue
 };
 
 // Palavras "fracas" — nunca terminar cue nelas (fica orfão visual).
@@ -183,7 +183,8 @@ export const CAPTION_Y_SAFE = {
 };
 
 // Largura de segurança (fração da largura útil do canvas).
-export const CAPTION_MAX_WIDTH_FRACTION = 0.78;
+// Prioridade HORIZONTAL: legenda cresce em largura antes de quebrar linha.
+export const CAPTION_MAX_WIDTH_FRACTION = 0.88;
 
 // Fade curto pra suavizar entrada/saída (não competir com a fala).
 export const CAPTION_FADE_SEC = 0.12;

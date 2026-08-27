@@ -178,8 +178,9 @@ const CAPTION_STYLES = [
 // Safe-area calibrada pra 9:16: UI do TikTok/Reels ocupa base ~18% e topo
 // ~10%. Legenda nunca gruda em borda.
 const CAPTION_Y_FRACTION = { bottom: 0.82, "middle-bottom": 0.70, top: 0.18, center: 0.5 };
-// Safe width — legenda ocupa 78% da largura útil (nunca colada nas bordas).
-const CAPTION_SAFE_WIDTH_FRAC = 0.78;
+// Safe width — legenda ocupa 88% da largura útil. Prioridade HORIZONTAL:
+// cresce em largura antes de quebrar linha; nunca colada nas bordas.
+const CAPTION_SAFE_WIDTH_FRAC = 0.88;
 const CAPTION_FADE_SEC = 0.12;
 
 const TRANSITION_DURATION = 0.08; // 80ms — quase imperceptível, evita "escurecer" no zoom-cut
@@ -2917,15 +2918,17 @@ async function callMistakeDetectionAPI(words) {
                     {edl.length > 0 && (
                       <button
                         onClick={togglePreviewMode}
-                        title="Toca só os trechos que a IA decidiu manter, em sequência"
+                        title={previewMode
+                          ? "Voltar ao vídeo original mostrando as sugestões da IA"
+                          : "Ver como o vídeo fica com todos os cortes aplicados"}
                         style={{
-                          background: previewMode ? "#1F3C2A" : "#1B1B21",
-                          color: previewMode ? "#A0E8C0" : "#C9C9D1",
-                          border: previewMode ? "1px solid #2E6845" : "1px solid #26262E",
+                          background: previewMode ? "#2E7D4F" : "#FF6A2B",
+                          color: previewMode ? "#FFFFFF" : "#1A0A02",
+                          border: "none",
                         }}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold"
+                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-bold shadow"
                       >
-                        {previewMode ? "Prévia editada ligada" : "Ver versão editada"}
+                        {previewMode ? "◀ Voltar ao original" : "▶ Ver vídeo editado"}
                       </button>
                     )}
                     <span style={{ color: "#5C5C66" }} className="text-xs truncate ml-auto">{fileName}</span>
