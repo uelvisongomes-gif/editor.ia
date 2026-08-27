@@ -173,6 +173,148 @@ const CAPTION_STYLES = [
     position: "middle-bottom", pillRadius: 12,
     fontFamily: "'Inter', sans-serif",
   },
+  // ==== Word-highlight variants (referência CapCut LIFE IN MOTION) ====
+  {
+    id: "hl_cyan", label: "13. Highlight Cyan",
+    textColor: "#FFFFFF", weight: 800, sizeScale: 1.0, uppercase: true,
+    bg: null, accentBg: "#00E5FF", accentTextColor: "#0A1F24", accentTarget: "last",
+    position: "middle-bottom", fontFamily: "'Inter', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.7)", blur: 6, offsetY: 2 },
+  },
+  {
+    id: "hl_magenta", label: "14. Highlight Magenta",
+    textColor: "#FFFFFF", weight: 800, sizeScale: 1.0, uppercase: true,
+    bg: null, accentBg: "#FF2E93", accentTextColor: "#FFFFFF", accentTarget: "last",
+    position: "middle-bottom", fontFamily: "'Inter', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.7)", blur: 6, offsetY: 2 },
+  },
+  {
+    id: "hl_red", label: "15. Highlight Red",
+    textColor: "#FFFFFF", weight: 800, sizeScale: 1.05, uppercase: true,
+    bg: null, accentBg: "#E11D48", accentTextColor: "#FFFFFF", accentTarget: "last",
+    position: "middle-bottom", fontFamily: "'Inter', sans-serif",
+    strokeColor: "rgba(0,0,0,0.6)", strokeWidth: 1,
+  },
+  {
+    id: "hl_lime", label: "16. Highlight Lime",
+    textColor: "#FFFFFF", weight: 800, sizeScale: 1.0, uppercase: true,
+    bg: null, accentBg: "#A3E635", accentTextColor: "#1A2010", accentTarget: "last",
+    position: "middle-bottom", fontFamily: "'Inter', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.7)", blur: 6, offsetY: 2 },
+  },
+  // ==== Pills e barras solidas ====
+  {
+    id: "black_pill", label: "17. Pill Preto",
+    textColor: "#FFFFFF", weight: 700, sizeScale: 0.98,
+    bg: "#000000", position: "middle-bottom", pillRadius: 999,
+    fontFamily: "'Inter', sans-serif",
+  },
+  {
+    id: "red_bar", label: "18. Barra Vermelha",
+    textColor: "#FFFFFF", weight: 800, sizeScale: 1.0, uppercase: true,
+    bg: "#DC2626", position: "middle-bottom", pillRadius: 3,
+    fontFamily: "'Inter', sans-serif", letterSpacing: 0.02,
+  },
+  {
+    id: "blue_bar", label: "19. Barra Azul",
+    textColor: "#FFFFFF", weight: 700, sizeScale: 0.98, uppercase: true,
+    bg: "#2563EB", position: "middle-bottom", pillRadius: 4,
+    fontFamily: "'Inter', sans-serif",
+  },
+  // ==== Karaoke (per-word active highlight) ====
+  {
+    id: "karaoke_yellow", label: "20. Karaokê Amarelo",
+    textColor: "#FFFFFF", weight: 800, sizeScale: 1.0, uppercase: true,
+    bg: null, perWord: true, highlightColor: "#FDE047",
+    position: "middle-bottom", fontFamily: "'Inter', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.75)", blur: 6, offsetY: 2 },
+  },
+  {
+    id: "karaoke_orange", label: "21. Karaokê Laranja",
+    textColor: "#FFFFFF", weight: 800, sizeScale: 1.0, uppercase: true,
+    bg: null, perWord: true, highlightColor: "#FB923C",
+    position: "middle-bottom", fontFamily: "'Inter', sans-serif",
+    shadow: { color: "rgba(0,0,0,0.75)", blur: 6, offsetY: 2 },
+  },
+  {
+    id: "karaoke_cyan", label: "22. Karaokê Ciano",
+    textColor: "#FFFFFF", weight: 800, sizeScale: 1.0, uppercase: true,
+    bg: null, perWord: true, highlightColor: "#22D3EE",
+    position: "middle-bottom", fontFamily: "'Inter', sans-serif",
+    strokeColor: "#000000", strokeWidth: 2,
+  },
+  // ==== Tipografia forte ====
+  {
+    id: "impact_stroke", label: "23. Impact Outline",
+    textColor: "#FFFFFF", weight: 900, sizeScale: 1.2, uppercase: true,
+    bg: null, position: "middle-bottom",
+    fontFamily: "'Inter', 'Arial Black', sans-serif",
+    strokeColor: "#000000", strokeWidth: 4,
+    letterSpacing: 0.02,
+  },
+  {
+    id: "impact_yellow", label: "24. Impact Amarelo",
+    textColor: "#FDE047", weight: 900, sizeScale: 1.15, uppercase: true,
+    bg: null, position: "middle-bottom",
+    fontFamily: "'Inter', 'Arial Black', sans-serif",
+    strokeColor: "#000000", strokeWidth: 3,
+  },
+  {
+    id: "retro_yellow", label: "25. Retrô Amarelo",
+    textColor: "#FCD34D", weight: 700, sizeScale: 1.0, italic: true,
+    bg: null, position: "middle-bottom",
+    fontFamily: "'Georgia', serif",
+    shadow: { color: "rgba(0,0,0,0.8)", blur: 4, offsetY: 3 },
+  },
+  {
+    id: "italic_light", label: "26. Itálico Leve",
+    textColor: "#FFFFFF", weight: 400, sizeScale: 1.0, italic: true,
+    bg: null, position: "middle-bottom",
+    fontFamily: "'Georgia', serif",
+    shadow: { color: "rgba(0,0,0,0.7)", blur: 8, offsetY: 3 },
+  },
+  // ==== Efeitos de luz ====
+  {
+    id: "glow_purple", label: "27. Glow Roxo",
+    textColor: "#FFFFFF", weight: 700, sizeScale: 1.0,
+    bg: null, position: "middle-bottom",
+    fontFamily: "'Inter', sans-serif",
+    shadow: { color: "rgba(139,92,246,0.95)", blur: 14, offsetY: 0 },
+  },
+  {
+    id: "glow_cyan", label: "28. Glow Ciano",
+    textColor: "#FFFFFF", weight: 700, sizeScale: 1.0, uppercase: true,
+    bg: null, position: "middle-bottom",
+    fontFamily: "'Inter', sans-serif",
+    shadow: { color: "rgba(34,211,238,0.95)", blur: 14, offsetY: 0 },
+  },
+  {
+    id: "glow_pink", label: "29. Glow Rosa",
+    textColor: "#FFFFFF", weight: 700, sizeScale: 1.0,
+    bg: null, position: "middle-bottom",
+    fontFamily: "'Inter', sans-serif",
+    shadow: { color: "rgba(244,114,182,0.95)", blur: 14, offsetY: 0 },
+  },
+  // ==== Backgrounds especiais ====
+  {
+    id: "white_bg", label: "30. Fundo Branco",
+    textColor: "#111111", weight: 800, sizeScale: 1.0, uppercase: true,
+    bg: "#FFFFFF", position: "middle-bottom", pillRadius: 6,
+    fontFamily: "'Inter', sans-serif",
+  },
+  {
+    id: "yellow_bg", label: "31. Fundo Amarelo",
+    textColor: "#111111", weight: 800, sizeScale: 1.0, uppercase: true,
+    bg: "#FDE047", position: "middle-bottom", pillRadius: 6,
+    fontFamily: "'Inter', sans-serif",
+  },
+  {
+    id: "gradient_ocean", label: "32. Gradient Oceano",
+    textColor: "#FFFFFF", weight: 700, sizeScale: 1.0, uppercase: true,
+    bgGradient: { from: "#06B6D4", to: "#3B82F6" },
+    position: "middle-bottom", pillRadius: 12,
+    fontFamily: "'Inter', sans-serif",
+  },
 ];
 
 // Safe-area calibrada pra 9:16: UI do TikTok/Reels ocupa base ~18% e topo
@@ -2417,34 +2559,91 @@ async function callMistakeDetectionAPI(words) {
 
                   {autoCaptionsEnabled && (
                     <div className="mb-3">
-                      <p style={{ color: "#6B6B75" }} className="text-[10px] font-bold uppercase tracking-wide mb-1.5">Estilo da legenda</p>
-                      <div className="grid grid-cols-2 gap-1.5 mb-2">
+                      <p style={{ color: "#6B6B75" }} className="text-[10px] font-bold uppercase tracking-wide mb-1.5">
+                        Estilo da legenda ({CAPTION_STYLES.length})
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 mb-2 max-h-[520px] overflow-y-auto pr-1">
                         {CAPTION_STYLES.map((s) => {
                           const active = captionStylePreset === s.id;
+                          // Palavra de destaque no mock — "MOTION"/"LIFE" viram
+                          // accent quando o template tem accentTarget/accentBg.
+                          const words = ["THE", "LIFE", "IN", "MOTION"];
+                          const highlightIdx = s.accentTarget === "first" ? 0 : words.length - 1;
+                          const bgFill = s.bg || (s.bgGradient ? `linear-gradient(90deg, ${s.bgGradient.from}, ${s.bgGradient.to})` : null);
                           return (
                             <button
                               key={s.id}
                               onClick={() => { setCaptionStylePreset(s.id); setCaptionStyleId(s.id); }}
-                              style={{ background: active ? "#2A1B10" : "#0F0F13", border: active ? "1px solid #FF6A2B" : "1px solid #1F1F26" }}
-                              className="text-left p-1.5 rounded-lg"
+                              style={{
+                                background: active ? "#2A1B10" : "#0F0F13",
+                                border: active ? "1px solid #FF6A2B" : "1px solid #1F1F26",
+                              }}
+                              className="text-left p-1 rounded-lg"
+                              title={s.label}
                             >
-                              <div className="flex items-center justify-center h-8 mb-1" style={{ background: "#000", borderRadius: 3 }}>
-                                <span
-                                  style={{
-                                    background: s.bg || "transparent",
-                                    color: s.textColor,
-                                    fontWeight: s.weight,
-                                    fontSize: 9,
-                                    textTransform: s.uppercase ? "uppercase" : "none",
-                                    padding: s.bg ? "1px 5px" : 0,
-                                    borderRadius: 2,
-                                    WebkitTextStroke: s.strokeColor ? `0.7px ${s.strokeColor}` : undefined,
-                                  }}
-                                >
-                                  Exemplo
-                                </span>
+                              {/* Mini-vídeo: fundo preto tipo player, legenda renderizada real */}
+                              <div
+                                className="flex items-center justify-center overflow-hidden"
+                                style={{ background: "#0A0A0A", borderRadius: 6, height: 60 }}
+                              >
+                                <div style={{ maxWidth: "94%", textAlign: "center", lineHeight: 1.15 }}>
+                                  {s.perWord ? (
+                                    <div style={{
+                                      fontFamily: s.fontFamily || "sans-serif",
+                                      fontWeight: s.weight,
+                                      fontStyle: s.italic ? "italic" : "normal",
+                                      fontSize: 12,
+                                      letterSpacing: s.letterSpacing ? `${s.letterSpacing}em` : "normal",
+                                      textShadow: s.shadow ? `0 ${s.shadow.offsetY || 2}px ${s.shadow.blur || 6}px ${s.shadow.color}` : undefined,
+                                      WebkitTextStroke: s.strokeColor ? `${Math.min(1.5, s.strokeWidth || 1)}px ${s.strokeColor}` : undefined,
+                                    }}>
+                                      {words.map((w, i) => (
+                                        <span key={i} style={{
+                                          color: i === highlightIdx ? (s.highlightColor || "#FFEB3B") : s.textColor,
+                                          marginRight: i < words.length - 1 ? 3 : 0,
+                                        }}>{w}</span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span
+                                      style={{
+                                        background: bgFill || "transparent",
+                                        color: s.textColor,
+                                        fontWeight: s.weight,
+                                        fontStyle: s.italic ? "italic" : "normal",
+                                        fontFamily: s.fontFamily || "sans-serif",
+                                        fontSize: 12,
+                                        letterSpacing: s.letterSpacing ? `${s.letterSpacing}em` : "normal",
+                                        textTransform: s.uppercase ? "uppercase" : "none",
+                                        padding: bgFill ? "3px 8px" : 0,
+                                        borderRadius: bgFill ? (s.pillRadius ?? 4) : 0,
+                                        border: s.borderColor && s.borderWidth ? `${Math.min(1.5, s.borderWidth)}px solid ${s.borderColor}` : undefined,
+                                        WebkitTextStroke: s.strokeColor ? `${Math.min(1.5, s.strokeWidth || 1)}px ${s.strokeColor}` : undefined,
+                                        textShadow: s.shadow ? `0 ${s.shadow.offsetY || 2}px ${s.shadow.blur || 6}px ${s.shadow.color}` : undefined,
+                                        display: "inline-block",
+                                      }}
+                                    >
+                                      {s.accentBg || s.accentColor ? (
+                                        words.map((w, i) => (
+                                          <span
+                                            key={i}
+                                            style={{
+                                              background: i === highlightIdx ? s.accentBg : undefined,
+                                              color: i === highlightIdx ? (s.accentTextColor || s.accentColor || s.textColor) : undefined,
+                                              padding: (i === highlightIdx && s.accentBg) ? "1px 4px" : 0,
+                                              borderRadius: (i === highlightIdx && s.accentBg) ? 3 : 0,
+                                              marginRight: i < words.length - 1 ? 3 : 0,
+                                            }}
+                                          >{w}</span>
+                                        ))
+                                      ) : "THE LIFE IN MOTION"}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <span className="block text-[10px] text-center" style={{ color: active ? "#FF6A2B" : "#C9C9D1" }}>{s.label}</span>
+                              <span className="block text-[9px] text-center mt-1 truncate" style={{ color: active ? "#FF6A2B" : "#8A8A94" }}>
+                                {s.label.replace(/^\d+\.\s*/, "")}
+                              </span>
                             </button>
                           );
                         })}
