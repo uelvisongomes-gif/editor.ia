@@ -125,9 +125,60 @@ export function buildEDL({ duration, words, semantic, silences, speechErrors, pr
   }
 
   const compact = collapseTinyKeeps(items);
-  const edl = applySafetyValidators(compact, { duration });
+  const consolidated = consolidateEDL(compact);
+  const edl = applySafetyValidators(consolidated, { duration });
 
   return { edl, problemCandidates };
+}
+
+/**
+ * Segunda passagem: junta cortes REMOVE adjacentes que têm um "keep"
+ * pequeno (< 0.4s) entre eles OU um review pequeno. Objetivo: evitar
+ * timeline picotada tipo REMOVE-KEEP-REMOVE-KEEP-REMOVE quando o "keep"
+ * do meio é uma respirada sem conteúdo.
+ *
+ * Regra:
+ *   REMOVE (>= 0.15s) + KEEP (< 0.4s, sem texto ou texto de 1 palavra)
+ *     + REMOVE (>= 0.15s)  →  vira UM REMOVE de start a end.
+ *
+ * NÃO junta se o keep do meio tem texto real (2+ palavras) — isso seria
+ * remover conteúdo bom pra "arrumar" o ritmo.
+ */
+function consolidateEDL(items) {
+  if (items.length < 3) return items;
+  const result = [];
+  let i = 0;
+  while (i < items.length) {
+    const cur = items[i];
+    const next = items[i + 1];
+    const nextNext = items[i + 2];
+    if (
+      next && nextNext &&
+      (cur.action === "remove" || cur.action === "trim") &&
+      next.action === "keep" &&
+      (nextNext.action === "remove" || nextNext.action === "trim") &&
+      (next.end - next.start) < 0.4 &&
+      wordCount(next.text) <= 1
+    ) {
+      // Merge os 3 num único remove — bordas do primeiro e do último
+      result.push({
+        ...cur,
+        end: nextNext.end,
+        reason: cur.reason || nextNext.reason,
+        text: [cur.text, next.text, nextNext.text].filter(Boolean).join(" "),
+      });
+      i += 3;
+      continue;
+    }
+    result.push(cur);
+    i += 1;
+  }
+  return result;
+}
+
+function wordCount(s) {
+  if (!s) return 0;
+  return s.trim().split(/\s+/).filter(Boolean).length;
 }
 
 function collapseTinyKeeps(items) {
