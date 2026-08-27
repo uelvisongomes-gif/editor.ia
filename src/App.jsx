@@ -17,6 +17,7 @@ import { createUsageLog, addUsageEntry, summarizeUsage } from "./services/usageL
 import { buildProjectSnapshot, saveProject, loadProject, listProjects, deleteProject } from "./services/projectRepository.js";
 import { stampsForProject } from "./services/pipelineVersion.js";
 import { scaleAt as computeSmartZoomScale, ZOOM_LEVELS, BASE_ZOOM, effectiveScale } from "./services/smartZoom.js";
+import { buildCaptionsFromWords, remapCaptionsToCompiledTime } from "./services/captionCompilation.js";
 
 let idCounter = 1;
 const genId = () => "seg-" + idCounter++;
@@ -521,35 +522,8 @@ async function extractAudioBlob(videoUrl) {
 
 // Builds precisely-timed caption cues directly from word-level timestamps
 // (no AI call needed for timing once we have real transcription).
-function buildCaptionsFromWords(words, maxWords = 8, pauseGap = 0.6) {
-  const cues = [];
-  let current = [];
-  let cueStart = null;
-  for (let i = 0; i < words.length; i++) {
-    const w = words[i];
-    if (current.length === 0) cueStart = w.start;
-    current.push(w);
-    const next = words[i + 1];
-    const gapToNext = next ? next.start - w.end : Infinity;
-    const endsSentence = /[.!?]$/.test((w.word || "").trim());
-    if (current.length >= maxWords || gapToNext >= pauseGap || endsSentence || !next) {
-      cues.push({
-        id: "cap-" + cues.length,
-        start: cueStart,
-        end: w.end,
-        text: current.map((c) => c.word).join(" ").trim(),
-        // Per-word timings pra estilos karaokê / word-highlight
-        words: current.map((c) => ({
-          word: (c.word || "").replace(/[.,!?;:]$/, ""),
-          start: c.start,
-          end: c.end,
-        })),
-      });
-      current = [];
-    }
-  }
-  return cues;
-}
+// buildCaptionsFromWords foi extraído pra src/services/captionCompilation.js.
+// Import feito no topo do arquivo.
 
 // Finds moments right after a natural pause in speech — good spots for a
 // punch-in zoom, since that's usually where emphasis/a new idea starts.
