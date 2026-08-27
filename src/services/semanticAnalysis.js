@@ -79,18 +79,22 @@ Recebe abaixo uma lista de sentenças numeradas extraídas da fala de UM vídeo.
    [{"sentenceIndex":N,"reason":"...","evidence":"trecho literal"}]
    Categorias válidas: "stutter", "filler", "false_start", "abandoned_phrase", "self_correction".
 
-   ATENÇÃO ESPECIAL a AUTOCORREÇÕES ("self_correction"):
-   Padrão: apresentador fala algo, percebe que está errado, e IMEDIATAMENTE corrige.
-   Ex: "tinha o maná e a lei... quer dizer, tinha a lei e o maná."
-   Ex: "eu vi na terça... não, quarta-feira."
-   Ex: "1929... digo, 1939."
-   Ex: "que floresceu ali. Então o que... o de arão que floresceu ali."
-   REGRA: quando você vir duas versões próximas de uma mesma frase onde a
-   segunda soa como uma CORREÇÃO da primeira (mesmo tema mas com detalhes
-   diferentes), MARQUE A PRIMEIRA como self_correction — ela é o erro.
-   Preferir marcar do que perder.
+   SEJA MUITO CONSERVADOR. Só marque quando o defeito é EVIDENTE:
+   - stutter: palavra repetida imediatamente ("eu eu", "que que")
+   - filler: cadeia de 3+ muletas seguidas ("é, tipo, né, sabe")
+   - false_start: apresentador claramente reinicia ("Hoje eu... hoje eu vou")
+   - abandoned_phrase: frase que morre sem conclusão + reinício claro
+   - self_correction: erro EXPLÍCITO + correção com marcador ("quer dizer", "digo")
 
-   Se NENHUM defeito claro existir, retorne [].
+   NÃO marque:
+   - Pausas naturais entre frases (outro módulo trata)
+   - Palavras estendidas para dar ênfase
+   - Repetições retóricas ("é muito, muito importante")
+   - Reformulações onde o segundo é apenas mais claro
+   - Padrões "não é X, é Y" — isso é conteúdo normal com negação
+
+   Se NENHUM defeito claro existir, retorne [] — melhor perder um erro
+   duvidoso do que marcar conteúdo real como defeito.
 
 REGRAS:
 - Prefira "consider_remove" apenas quando tiver certeza de que a sentença é dispensável e a remoção não vai quebrar o que vem depois.
@@ -242,7 +246,11 @@ export async function analyzeSemantics(words, { signal, onUsage } = {}) {
     speechErrors.push({
       start: s.start,
       end: s.end,
-      confidence: 0.8,
+      // Confidence deliberadamente baixa (0.65 < executeThreshold 0.80)
+      // pra que o LLM só SUGIRA — nunca corte automático. Usuário decide
+      // no painel "A revisar". Evita LLM criar dezenas de cortes que
+      // interrompem o fluxo do video.
+      confidence: 0.65,
       reason: e.reason || "filler",
       source: "speechError",
       detectedBy: "llm",
