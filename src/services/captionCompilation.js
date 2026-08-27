@@ -146,3 +146,42 @@ export function compileCaptions(words, segments, opts = {}) {
   const cues = buildCaptionsFromWords(words, opts.maxWords, opts.pauseGap);
   return remapCaptionsToCompiledTime(cues, segments);
 }
+
+/**
+ * Corta cues pra caberem SOMENTE nos segmentos KEEP, MAS mantém timings
+ * originais. Diferente de `remapCaptionsToCompiledTime` que também shift
+ * o tempo — este só CLIPA. Útil quando o player toca com currentTime
+ * original (seekando pra pular cortes), mas queremos que a cue não
+ * apareça durante um trecho removido.
+ *
+ * Cue que atravessa borda de REMOVE vira 2+ cues (uma antes, uma depois).
+ */
+export function clipCaptionsToKeepSegments(cues, segments) {
+  if (!cues?.length) return [];
+  if (!segments?.length) return cues.slice();
+  const keeps = segments.filter((s) => !s.deleted);
+  if (!keeps.length) return [];
+  const result = [];
+  for (const cue of cues) {
+    for (const k of keeps) {
+      const overlapStart = Math.max(cue.start, k.start);
+      const overlapEnd = Math.min(cue.end, k.end);
+      if (overlapEnd - overlapStart <= 0.01) continue;
+      const wordsInPart = (cue.words || [])
+        .filter((w) => w.end > overlapStart && w.start < overlapEnd)
+        .map((w) => ({
+          word: w.word,
+          start: Math.max(overlapStart, w.start),
+          end: Math.min(overlapEnd, w.end),
+        }));
+      result.push({
+        id: `${cue.id}${result.length ? "-" + result.length : ""}`,
+        start: overlapStart,
+        end: overlapEnd,
+        text: wordsInPart.length ? wordsInPart.map((w) => w.word).join(" ") : cue.text,
+        words: wordsInPart,
+      });
+    }
+  }
+  return result;
+}

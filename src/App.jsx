@@ -17,7 +17,7 @@ import { createUsageLog, addUsageEntry, summarizeUsage } from "./services/usageL
 import { buildProjectSnapshot, saveProject, loadProject, listProjects, deleteProject } from "./services/projectRepository.js";
 import { stampsForProject } from "./services/pipelineVersion.js";
 import { scaleAt as computeSmartZoomScale, ZOOM_LEVELS, BASE_ZOOM, effectiveScale } from "./services/smartZoom.js";
-import { buildCaptionsFromWords, remapCaptionsToCompiledTime } from "./services/captionCompilation.js";
+import { buildCaptionsFromWords, remapCaptionsToCompiledTime, clipCaptionsToKeepSegments } from "./services/captionCompilation.js";
 
 let idCounter = 1;
 const genId = () => "seg-" + idCounter++;
@@ -2066,7 +2066,14 @@ async function callMistakeDetectionAPI(words) {
     }
   };
 
-  const activeCaption = captions.find((c) => currentTime >= c.start && currentTime < c.end);
+  // Cues limpas — cortadas nas bordas dos KEEPs, timings originais.
+  // Se um cue atravessa REMOVE ele vira 2 cues, evita legenda ficando
+  // "presa" na tela durante um trecho removido.
+  const clippedCaptions = useMemo(
+    () => clipCaptionsToKeepSegments(captions, segments),
+    [captions, segments]
+  );
+  const activeCaption = clippedCaptions.find((c) => currentTime >= c.start && currentTime < c.end);
 
   const renderVideo = useCallback(
     async ({ segs, colorAdjust, captions, captionStyleOverride, zoomEnabled, zoomIntensity, zoomCues, resolutionLabel, transitionsOn, onProgress }) => {
@@ -2154,7 +2161,7 @@ async function callMistakeDetectionAPI(words) {
       const blob = await renderVideo({
         segs: activeSegments,
         colorAdjust,
-        captions,
+        captions: clippedCaptions,
         captionStyleOverride: captionStyle,
         zoomEnabled,
         zoomIntensity,
