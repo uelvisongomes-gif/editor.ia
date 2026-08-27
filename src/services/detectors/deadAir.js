@@ -1,14 +1,22 @@
 // Dead Air: gaps entre palavras + silêncio real ESCONDIDO dentro de
 // palavras esticadas (artefato do Whisper).
 
-// Regras:
-//   gap < 1.5s   → PAUSA NATURAL entre frases. Não candidata.
-//   1.5-3s      → REVIEW (usuário decide se corta)
-//   >= 3s        → REMOVE (dead air óbvio)
-// Isso preserva pausas dramáticas de 1-2s que dão ritmo ao vídeo.
-const NATURAL_PAUSE_LIMIT = 1.5;
-const DEAD_AIR_LIMIT = 3.0;
+// Regras baseadas em PONTUAÇÃO da palavra anterior:
+//   Depois de "." "?" "!" (fim de sentença): pausa natural até 3s.
+//                                            REMOVE só se >= 3s.
+//   Depois de "," (pausa curta):             pausa até 2s ok.
+//                                            REMOVE se >= 2s.
+//   Sem pontuação (dead air mid-fala):       pausa até 1s ok.
+//                                            REMOVE se >= 1s.
+// Isso preserva pausas dramáticas entre frases mas pega dead air real.
 const GAP_EDGE_MARGIN = 0.15;
+
+function thresholdForWord(word) {
+  const raw = (word.word || "").trim();
+  if (/[.!?…]$/.test(raw)) return { removeAt: 3.0, reviewAt: 1.5 };
+  if (/,$/.test(raw)) return { removeAt: 2.0, reviewAt: 1.2 };
+  return { removeAt: 1.0, reviewAt: 0.7 };
+}
 
 const HIDDEN_SILENCE_LEVEL = 0.025;
 const HIDDEN_SILENCE_MIN_DUR = 0.5;
@@ -21,13 +29,12 @@ export function detectGapSilence({ words } = {}) {
     const w = words[i];
     const nx = words[i + 1];
     const gap = nx.start - w.end;
-    if (gap < NATURAL_PAUSE_LIMIT) continue;
+    const { removeAt, reviewAt } = thresholdForWord(w);
+    if (gap < reviewAt) continue;
     const cutStart = w.end + GAP_EDGE_MARGIN;
     const cutEnd = nx.start - GAP_EDGE_MARGIN;
-    if (cutEnd - cutStart < 0.3) continue;
-    // Dead air (>=3s) = alta confiança → REMOVE
-    // Pausa longa (1.5-3s) = média confiança → REVIEW
-    const conf = gap >= DEAD_AIR_LIMIT ? 0.90 : 0.70;
+    if (cutEnd - cutStart < 0.2) continue;
+    const conf = gap >= removeAt ? 0.90 : 0.70;
     out.push({
       start: cutStart,
       end: cutEnd,
@@ -35,7 +42,7 @@ export function detectGapSilence({ words } = {}) {
       reason: "silence",
       source: "speechError",
       detectedBy: "heuristic",
-      text: `(pausa entre palavras — ${gap.toFixed(1)}s)`,
+      text: `(pausa — ${gap.toFixed(1)}s)`,
     });
   }
   return out;
