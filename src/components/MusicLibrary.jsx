@@ -19,8 +19,37 @@ export function MusicLibrary({ selectedMusicId, onSelect, resolveTrack }) {
   const [remoteTracks, setRemoteTracks] = useState([]);
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [remoteError, setRemoteError] = useState(null);
+  const [uploadedTracks, setUploadedTracks] = useState([]);
   const audioRef = useRef(null);
+  const fileInputRef = useRef(null);
   const searchTimerRef = useRef(null);
+
+  const handleUpload = (files) => {
+    const list = Array.from(files || []).filter((f) => f.type.startsWith("audio/"));
+    if (!list.length) return;
+    const audio = document.createElement("audio");
+    Promise.all(list.map((file) => new Promise((resolve) => {
+      const url = URL.createObjectURL(file);
+      const a = new Audio();
+      a.src = url;
+      a.addEventListener("loadedmetadata", () => {
+        resolve({
+          id: `upload-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          title: file.name.replace(/\.[^.]+$/, ""),
+          artist: "Sua música",
+          category: "upload",
+          durationSec: Math.round(a.duration || 60),
+          url,
+          source: "upload",
+          license: "user_owned",
+        });
+      }, { once: true });
+      a.addEventListener("error", () => resolve(null), { once: true });
+    }))).then((tracks) => {
+      const clean = tracks.filter(Boolean);
+      setUploadedTracks((prev) => [...clean, ...prev]);
+    });
+  };
 
   // Busca remota com debounce quando query >= 2 chars.
   useEffect(() => {
@@ -85,6 +114,7 @@ export function MusicLibrary({ selectedMusicId, onSelect, resolveTrack }) {
     const isRemote = track.source === "itunes" || track.source === "jamendo";
     const isPreviewOnly = track.source === "itunes";
     const isFull = track.source === "jamendo";
+    const isUpload = track.source === "upload";
     return (
       <div
         key={track.id}
@@ -115,6 +145,7 @@ export function MusicLibrary({ selectedMusicId, onSelect, resolveTrack }) {
             {track.artist}{track.bpm ? ` · ${track.bpm} BPM` : ""} · {fmtDur(track.durationSec)}
             {isPreviewOnly && <span style={{ color: "#FFB020" }} className="ml-1">· preview 30s (loop)</span>}
             {isFull && <span style={{ color: "#5DCAA5" }} className="ml-1">· CC-BY (completa)</span>}
+            {isUpload && <span style={{ color: "#8AA0FF" }} className="ml-1">· seu arquivo</span>}
           </p>
         </div>
         <button
@@ -133,6 +164,23 @@ export function MusicLibrary({ selectedMusicId, onSelect, resolveTrack }) {
 
   return (
     <div>
+      {/* Upload de arquivo do usuário — trilha completa própria */}
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        style={{ background: "#0F0F13", border: "1px dashed #FF6A2B", color: "#FF6A2B" }}
+        className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold mb-2"
+      >
+        <span>⬆</span> Enviar sua música (MP3 · WAV)
+      </button>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="audio/*"
+        multiple
+        className="hidden"
+        onChange={(e) => handleUpload(e.target.files)}
+      />
+
       {/* Busca */}
       <div className="flex items-center gap-1.5 mb-2" style={{ background: "#0F0F13", border: "1px solid #1F1F26", borderRadius: 8, padding: "6px 10px" }}>
         <span style={{ color: "#5C5C66" }}>🔍</span>
@@ -205,8 +253,16 @@ export function MusicLibrary({ selectedMusicId, onSelect, resolveTrack }) {
           </>
         ) : (
           <>
+            {uploadedTracks.length > 0 && (
+              <>
+                <p style={{ color: "#6B6B75" }} className="text-[10px] font-bold uppercase tracking-wide pt-1">Suas músicas</p>
+                {uploadedTracks.map(renderTrack)}
+                <div style={{ borderTop: "1px solid #1F1F26", margin: "6px 0" }} />
+                <p style={{ color: "#6B6B75" }} className="text-[10px] font-bold uppercase tracking-wide">Catálogo local</p>
+              </>
+            )}
             {localResults.map(renderTrack)}
-            {!localResults.length && (
+            {!localResults.length && !uploadedTracks.length && (
               <p style={{ color: "#6B6B75" }} className="text-xs text-center py-3">Nenhuma música local.</p>
             )}
           </>

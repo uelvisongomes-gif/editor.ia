@@ -910,7 +910,15 @@ export default function AiVideoEditor() {
   const [musicVolume, setMusicVolume] = useState(0.35); // música de fundo
   const [ambientVolume, setAmbientVolume] = useState(0.20); // ambiente/ruído
   const [selectedMusicId, setSelectedMusicId] = useState(null);
+  // Track completo — cobre uploads e resultados remotos que não estão
+  // no catálogo local. Se null cai no getMusicById(catálogo).
+  const [selectedMusicTrack, setSelectedMusicTrack] = useState(null);
   const musicAudioRef = useRef(null);
+  const resolveMusicTrack = (id) => selectedMusicTrack || getMusicById(id);
+  const handleMusicSelect = (id, track) => {
+    setSelectedMusicId(id);
+    setSelectedMusicTrack(id ? (track || null) : null);
+  };
 
   const [videoTypeId, setVideoTypeId] = useState("vendas");
   const [platformIds, setPlatformIds] = useState(["tiktok"]);
@@ -1014,7 +1022,7 @@ export default function AiVideoEditor() {
   useEffect(() => {
     const audio = musicAudioRef.current;
     if (!audio) return;
-    const track = selectedMusicId ? getMusicById(selectedMusicId) : null;
+    const track = selectedMusicId ? resolveMusicTrack(selectedMusicId) : null;
     if (!track) { audio.pause(); audio.src = ""; return; }
     if (audio.src !== track.url) audio.src = track.url;
     audio.volume = musicVolume;
@@ -3058,10 +3066,10 @@ async function callMistakeDetectionAPI(words) {
                 <Panel title="Música">
                   <MusicLibrary
                     selectedMusicId={selectedMusicId}
-                    onSelect={setSelectedMusicId}
+                    onSelect={handleMusicSelect}
                   />
                   {selectedMusicId && (() => {
-                    const t = getMusicById(selectedMusicId);
+                    const t = resolveMusicTrack(selectedMusicId);
                     return t ? (
                       <p style={{ color: "#9A9AA5" }} className="text-[10px] mt-2 leading-snug">
                         Selecionado: <span style={{ color: "#F5F5F7" }} className="font-semibold">{t.title}</span>. Volume no painel "Volume".
@@ -3080,7 +3088,7 @@ async function callMistakeDetectionAPI(words) {
                   <SliderRow label="Fundo (ambiente)" value={Math.round(ambientVolume * 100)} min={0} max={100}
                     onChange={(v) => setAmbientVolume(v / 100)} suffix="%" />
                   {selectedMusicId && (() => {
-                    const t = getMusicById(selectedMusicId);
+                    const t = resolveMusicTrack(selectedMusicId);
                     return t ? (
                       <div style={{ background: "#0F0F13", border: "1px solid #1F1F26" }} className="rounded-lg p-2 mt-2">
                         <p style={{ color: "#6B6B75" }} className="text-[10px] uppercase font-bold mb-0.5">Música selecionada</p>
