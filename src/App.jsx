@@ -3281,16 +3281,27 @@ async function callMistakeDetectionAPI(words) {
                     <video src={editedVideoUrl} controls style={{ width: "100%", height: "100%", display: "block" }} />
                   </div>
                 )}
-                {!showingEdited && (
-                  <div className="flex items-center gap-3 mt-3 flex-wrap">
-                    <button onClick={togglePlay} style={{ background: "#FF6A2B", color: "#1A0A02" }} className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0">
-                      {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
-                    </button>
-                    <span style={{ color: "#9A9AA5" }} className="text-xs tabular-nums">
-                      {formatTime(currentTime)} / {formatTime(duration)}
-                    </span>
+                {!showingEdited && (() => {
+                  // Extrai só a data (YYYY-MM-DD) do nome do arquivo.
+                  const dateMatch = fileName?.match(/(\d{4})[-_\.\/](\d{2})[-_\.\/](\d{2})/);
+                  const shortName = dateMatch ? `${dateMatch[3]}/${dateMatch[2]}/${dateMatch[1]}` : fileName;
+                  return (
+                  <>
+                    <div className="flex items-center gap-3 mt-3 flex-wrap">
+                      <button onClick={togglePlay} style={{ background: "#FF6A2B", color: "#1A0A02" }} className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0">
+                        {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
+                      </button>
+                      <span style={{ color: "#9A9AA5" }} className="text-xs tabular-nums">
+                        {formatTime(currentTime)} / {formatTime(duration)}
+                      </span>
+                      <span style={{ color: "#5C5C66" }} className="text-xs truncate ml-auto">{shortName}</span>
+                      <button onClick={() => fileInputRef.current?.click()} style={{ color: "#9A9AA5" }} className="text-xs flex items-center gap-1 flex-shrink-0">
+                        <X size={12} /> Trocar vídeo
+                      </button>
+                      <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
+                    </div>
                     {edl.length > 0 && (
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center justify-center gap-2 mt-3">
                         <button
                           onClick={() => setPreviewMode(false)}
                           title="Vídeo bruto com as sugestões da IA marcadas"
@@ -3299,9 +3310,9 @@ async function callMistakeDetectionAPI(words) {
                             color: !previewMode ? "#1A0A02" : "#C9C9D1",
                             border: !previewMode ? "none" : "1px solid #26262E",
                           }}
-                          className="flex flex-col items-center leading-tight px-3 py-1 rounded-md font-bold shadow"
+                          className="flex flex-col items-center leading-tight px-4 py-1.5 rounded-md font-bold shadow"
                         >
-                          <span className="text-[11px]">Vídeo original</span>
+                          <span className="text-xs">Vídeo original</span>
                           <span className="text-[10px] tabular-nums opacity-80">{formatTime(duration)}</span>
                         </button>
                         <button
@@ -3312,20 +3323,16 @@ async function callMistakeDetectionAPI(words) {
                             color: previewMode ? "#FFFFFF" : "#C9C9D1",
                             border: previewMode ? "none" : "1px solid #26262E",
                           }}
-                          className="flex flex-col items-center leading-tight px-3 py-1 rounded-md font-bold shadow"
+                          className="flex flex-col items-center leading-tight px-4 py-1.5 rounded-md font-bold shadow"
                         >
-                          <span className="text-[11px]">Vídeo editado</span>
+                          <span className="text-xs">Vídeo editado</span>
                           <span className="text-[10px] tabular-nums opacity-80">{formatTime(finalDuration)}</span>
                         </button>
                       </div>
                     )}
-                    <span style={{ color: "#5C5C66" }} className="text-xs truncate ml-auto">{fileName}</span>
-                    <button onClick={() => fileInputRef.current?.click()} style={{ color: "#9A9AA5" }} className="text-xs flex items-center gap-1 flex-shrink-0">
-                      <X size={12} /> Trocar vídeo
-                    </button>
-                    <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
-                  </div>
-                )}
+                  </>
+                  );
+                })()}
                 {showingEdited && editedVideoUrl && (
                   <div className="flex items-center gap-3 mt-3">
                     <button onClick={() => fileInputRef.current?.click()} style={{ color: "#9A9AA5" }} className="text-xs flex items-center gap-1 flex-shrink-0 ml-auto">
