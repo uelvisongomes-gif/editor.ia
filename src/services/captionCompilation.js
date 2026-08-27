@@ -10,43 +10,20 @@
 // REMOVIDO some (não vira cue no output). Legenda que atravessa borda
 // de corte é encolhida ou dividida.
 
-const DEFAULT_MAX_WORDS = 8;
-const DEFAULT_PAUSE_GAP = 0.6;
+import { buildCaptionsSmartly } from "./captionLayoutEngine.js";
 
 /**
- * Agrupa palavras em cues respeitando: número máximo por cue, gap entre
- * palavras (nova cue quando gap > pauseGap) e fim de frase (.!?).
- * Cada cue carrega `words[]` com timings individuais pra estilos
- * word-highlight/karaokê.
+ * Agrupa palavras em cues profissionais (3-6 palavras, respeitando pausas
+ * naturais, evitando terminar em connector, com emphasisWordIdx populado).
+ *
+ * Delega ao captionLayoutEngine — os args maxWords/pauseGap ficam mantidos
+ * pra compat mas o motor usa os defaults semânticos (que são mais estritos).
  */
-export function buildCaptionsFromWords(words, maxWords = DEFAULT_MAX_WORDS, pauseGap = DEFAULT_PAUSE_GAP) {
-  if (!words?.length) return [];
-  const cues = [];
-  let current = [];
-  let cueStart = null;
-  for (let i = 0; i < words.length; i++) {
-    const w = words[i];
-    if (current.length === 0) cueStart = w.start;
-    current.push(w);
-    const next = words[i + 1];
-    const gapToNext = next ? next.start - w.end : Infinity;
-    const endsSentence = /[.!?]$/.test((w.word || "").trim());
-    if (current.length >= maxWords || gapToNext >= pauseGap || endsSentence || !next) {
-      cues.push({
-        id: "cap-" + cues.length,
-        start: cueStart,
-        end: w.end,
-        text: current.map((c) => c.word).join(" ").trim(),
-        words: current.map((c) => ({
-          word: (c.word || "").replace(/[.,!?;:]$/, ""),
-          start: c.start,
-          end: c.end,
-        })),
-      });
-      current = [];
-    }
-  }
-  return cues;
+export function buildCaptionsFromWords(words, maxWords, pauseGap) {
+  const opts = {};
+  if (typeof maxWords === "number") opts.maxWords = maxWords;
+  if (typeof pauseGap === "number") opts.naturalBreakGapSec = pauseGap;
+  return buildCaptionsSmartly(words, opts);
 }
 
 /**
@@ -132,6 +109,7 @@ export function remapCaptionsToCompiledTime(cues, segments) {
         end: compEnd,
         text: wordsInPart.length ? wordsInPart.map((w) => w.word).join(" ") : cue.text,
         words: wordsInPart,
+        emphasisWordIdx: cue.emphasisWordIdx ?? -1,
       });
     }
     result.push(...parts);

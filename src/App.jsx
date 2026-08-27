@@ -175,17 +175,22 @@ const CAPTION_STYLES = [
   },
 ];
 
-const CAPTION_Y_FRACTION = { bottom: 0.93, "middle-bottom": 0.78, top: 0.12, center: 0.5 };
+// Safe-area calibrada pra 9:16: UI do TikTok/Reels ocupa base ~18% e topo
+// ~10%. Legenda nunca gruda em borda.
+const CAPTION_Y_FRACTION = { bottom: 0.82, "middle-bottom": 0.70, top: 0.18, center: 0.5 };
+// Safe width — legenda ocupa 78% da largura útil (nunca colada nas bordas).
+const CAPTION_SAFE_WIDTH_FRAC = 0.78;
+const CAPTION_FADE_SEC = 0.12;
 
 const TRANSITION_DURATION = 0.08; // 80ms — quase imperceptível, evita "escurecer" no zoom-cut
 
 function wrapTextByWidth(ctx, text, maxWidth) {
   const words = text.split(/\s+/).filter(Boolean);
   const totalWidth = ctx.measureText(text).width;
-  // Cabe numa linha? Retorna direto.
   if (totalWidth <= maxWidth) return [text];
-  // Quebra em 2 linhas balanceadas — evita "1 palavra por linha".
-  const targetLines = Math.min(3, Math.max(2, Math.ceil(totalWidth / maxWidth)));
+  // HARD CAP: 2 linhas. Se não couber, o Layout Engine já era pra ter
+  // dividido em outra cue. Aqui só balanceamos.
+  const targetLines = 2;
   const target = totalWidth / targetLines;
   const lines = [];
   let cur = "";
@@ -195,8 +200,6 @@ function wrapTextByWidth(ctx, text, maxWidth) {
     const wSpace = cur ? " " + w : w;
     const wWidth = ctx.measureText(wSpace).width;
     const nextWidth = curWidth + wWidth;
-    // Fecha linha quando: passou do alvo E ainda tem palavras pra
-    // preencher próxima linha; OU não cabe em maxWidth.
     const remainingWords = words.length - i - 1;
     const shouldBreak = (nextWidth > maxWidth && cur) ||
                         (nextWidth >= target && cur && remainingWords >= 1 && lines.length < targetLines - 1);
@@ -210,6 +213,11 @@ function wrapTextByWidth(ctx, text, maxWidth) {
     }
   }
   if (cur) lines.push(cur);
+  // Se sobrou 3ª linha, força junção nas 2 primeiras (fallback defensivo).
+  if (lines.length > 2) {
+    const merged = lines.slice(1).join(" ");
+    return [lines[0], merged];
+  }
   return lines.length ? lines : [text];
 }
 
@@ -241,9 +249,15 @@ function drawFrame(ctx, video, canvas, colorAdjust, captions, t, zoomScale = 1, 
   ctx.font = `${italicPrefix}${captionStyle.weight} ${fontSize}px ${fontFamily}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const maxWidth = canvas.width * 0.94;
-  const yFrac = CAPTION_Y_FRACTION[captionStyle.position] ?? 0.93;
+  // Safe width — nunca colada nas bordas.
+  const maxWidth = canvas.width * CAPTION_SAFE_WIDTH_FRAC;
+  const yFrac = CAPTION_Y_FRACTION[captionStyle.position] ?? 0.82;
   const centerY = canvas.height * yFrac;
+  // Fade curto de entrada/saída (não competir com a fala).
+  const inLeft = (t - cue.start) / CAPTION_FADE_SEC;
+  const inRight = (cue.end - t) / CAPTION_FADE_SEC;
+  const captionAlpha = Math.max(0, Math.min(1, inLeft, inRight, 1));
+  ctx.globalAlpha = captionAlpha;
 
   // Modo karaokê: renderiza palavra-a-palavra com a atual em destaque.
   if (captionStyle.perWord && cue.words?.length) {
@@ -304,6 +318,7 @@ function drawFrame(ctx, video, canvas, colorAdjust, captions, t, zoomScale = 1, 
       }
       ctx.textAlign = "center"; // reset
     });
+    ctx.globalAlpha = 1;
     return;
   }
 
@@ -352,16 +367,24 @@ function drawFrame(ctx, video, canvas, colorAdjust, captions, t, zoomScale = 1, 
   }
 
   // ==== Palavras em destaque (accent) ====
-  // Se accentTarget definido, marca as palavras a destacar em cada linha
-  const accentWordIdx = pickAccentWordIndex(text, captionStyle.accentTarget);
+  // Prioridade: emphasisWordIdx canônico da cue (semântico) > accentTarget
+  // do template ("last"/"first" — fallback estético).
+  const accentWordIdx = pickAccentWordIndex(text, captionStyle.accentTarget, cue);
 
   lines.forEach((line, i) => {
     const y = startY + i * lineHeight;
     drawStyledLine(ctx, line, canvas.width / 2, y, captionStyle, fontSize, accentWordIdx, text);
   });
+
+  // Reset alpha pra não vazar pro próximo frame.
+  ctx.globalAlpha = 1;
 }
 
-function pickAccentWordIndex(fullText, target) {
+function pickAccentWordIndex(fullText, target, cue) {
+  // 1) Semântica canônica vinda do captionLayoutEngine
+  if (cue && Number.isInteger(cue.emphasisWordIdx) && cue.emphasisWordIdx >= 0) {
+    return cue.emphasisWordIdx;
+  }
   if (!target) return -1;
   const words = fullText.trim().split(/\s+/);
   if (target === "last") return words.length - 1;
