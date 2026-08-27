@@ -369,7 +369,60 @@ export function collectCandidates({ words, semantic, silences, speechErrors, pro
     if (e - s < 0.1) continue;
     clamped.push({ ...c, start: s, end: e });
   }
-  return dedupCandidates(clamped);
+  // Depois do dedup por overlap tradicional, faz semantic aggregation:
+  // agrupa candidatos consecutivos que estão a < 0.5s um do outro num
+  // único candidato multi-evidência. Isso evita que 12 detectores
+  // heurísticos, ao pegarem o mesmo defeito por ângulos diferentes,
+  // produzam 4-5 cortes onde deveria haver 1.
+  const deduped = dedupCandidates(clamped);
+  return semanticAggregation(deduped);
+}
+
+/**
+ * Segunda passagem: junta candidatos MUITO próximos temporalmente
+ * (< 0.5s de gap) num único grupo. Preserva TODAS as evidências.
+ * Diferente de dedupCandidates (que exige overlap ≥ 50%), este junta
+ * candidatos adjacentes que representam o MESMO defeito de fala visto
+ * por múltiplos detectores.
+ *
+ * Exemplo:
+ *   3.10-3.35 filler       ← detector A
+ *   3.35-3.60 silence      ← detector B (0.0s gap)
+ *   3.55-3.92 restart      ← detector C (0.05s gap com o filler)
+ *   → único grupo 3.10-3.92 com 3 evidências.
+ */
+export function semanticAggregation(candidates, opts = {}) {
+  const MERGE_GAP = opts.mergeGap ?? 0.5;
+  if (!candidates?.length) return [];
+  const sorted = [...candidates].sort((a, b) => a.start - b.start);
+  const groups = [];
+  for (const cur of sorted) {
+    const last = groups[groups.length - 1];
+    // Não mescla se algum é surgical E o tipo é diferente — surgical
+    // (stutter, false_start) marca borda de palavra e não pode ser
+    // engordado por adjacente de outra natureza.
+    const gap = last ? cur.start - last.end : Infinity;
+    const bothOrNoneSurgical = (SURGICAL_TYPES.has(last?.primaryType) === SURGICAL_TYPES.has(cur.primaryType));
+    if (last && gap <= MERGE_GAP && bothOrNoneSurgical) {
+      last.start = Math.min(last.start, cur.start);
+      last.end = Math.max(last.end, cur.end);
+      last.detectors.push(...cur.detectors);
+      // Primary type e confidence: o maior confidence vence.
+      if ((cur.confidence ?? 0) > (last.confidence ?? 0)) {
+        last.confidence = cur.confidence;
+        last.primaryType = cur.primaryType;
+      }
+      if (cur.text && (!last.text || cur.text.length > last.text.length)) {
+        last.text = cur.text;
+      }
+      last.canOverrideProtection = last.canOverrideProtection || cur.canOverrideProtection;
+      if (cur.replacementNote && !last.replacementNote) last.replacementNote = cur.replacementNote;
+      if (cur.trimOnly && !last.trimOnly) last.trimOnly = true;
+    } else {
+      groups.push({ ...cur, detectors: [...cur.detectors] });
+    }
+  }
+  return groups;
 }
 
 /**
