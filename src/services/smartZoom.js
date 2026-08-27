@@ -14,13 +14,18 @@
 let _id = 1;
 const nextId = () => "zoom-" + _id++;
 
-// Níveis centralizados — perceptíveis mas moderados (ref 1.12-1.16 do
-// usuário). Multiplicados por BASE_ZOOM (1.10) na scaleAt do renderer,
-// dão perceived +14/+20/+26% respectivamente.
+// Níveis centralizados — calibrados pela REFERÊNCIA VISUAL do usuário:
+//   ZOOM_OUT (normal do vídeo) = rosto ocupa ~50% do frame → scale 1.0
+//   ZOOM_IN (face-fill)        = rosto ocupa ~80% do frame → ~1.5x
+//
+// Multiplicados por BASE_ZOOM (1.10) no renderer:
+//   light   1.15 * 1.10 = 1.27 efetivo — ênfase leve (14% mais perto)
+//   medium  1.28 * 1.10 = 1.41 efetivo — 30% mais perto do rosto
+//   strong  1.38 * 1.10 = 1.52 efetivo — face-fill da referência (~50% mais perto)
 export const ZOOM_LEVELS = {
-  light:  { value: 1.14, label: "Suave" },
-  medium: { value: 1.20, label: "Moderado" },
-  strong: { value: 1.26, label: "Forte" },
+  light:  { value: 1.15, label: "Suave" },
+  medium: { value: 1.28, label: "Moderado" },
+  strong: { value: 1.38, label: "Forte" },
   // Zoom out — retorno suave para NORMAL (nunca abaixo de 1.0 efetivo).
   out_light:  { value: 0.93, label: "Suave" },
   out_medium: { value: 0.87, label: "Moderado" },
