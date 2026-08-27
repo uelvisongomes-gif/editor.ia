@@ -2451,7 +2451,7 @@ async function callMistakeDetectionAPI(words) {
                       </div>
                       <div className="flex items-center gap-1 mb-1">
                         <span style={{ color: "#6B6B75" }} className="text-[10px]">Posição:</span>
-                        {[["bottom", "Inferior"], ["middle-bottom", "Centro-baixo"], ["top", "Topo"]].map(([id, label]) => (
+                        {[["top", "Alta"], ["center", "Média"], ["bottom", "Baixa"]].map(([id, label]) => (
                           <button key={id} onClick={() => setCaptionPosition(id)}
                             style={{ background: captionPosition === id ? "#FF6A2B" : "#1B1B21", color: captionPosition === id ? "#1A0A02" : "#C9C9D1" }}
                             className="text-[10px] px-2 py-0.5 rounded font-semibold">
@@ -2868,30 +2868,60 @@ async function callMistakeDetectionAPI(words) {
                     onPause={() => setIsPlaying(false)}
                   />
                   {activeCaption && (() => {
+                    // Posições relativas ao VIDEO CONTAINER, respeitando
+                    // seleção do usuário (Alta/Média/Baixa). Valores da
+                    // spec: Alta ~18%, Média ~50%, Baixa ~75%.
                     const posStyle = {
-                      bottom: { bottom: "6%" },
-                      "middle-bottom": { bottom: "22%" },
-                      top: { top: "8%" },
-                      center: { top: "45%" },
-                    }[captionStyle.position] || { bottom: "6%" };
+                      top:    { top: "18%",    transform: "translate(-50%, -50%)" },
+                      center: { top: "50%",    transform: "translate(-50%, -50%)" },
+                      bottom: { top: "75%",    transform: "translate(-50%, -50%)" },
+                    }[captionPosition] || { top: "75%", transform: "translate(-50%, -50%)" };
                     const text = captionStyle.uppercase ? activeCaption.text.toUpperCase() : activeCaption.text;
                     return (
-                      <div className="absolute left-1/2 -translate-x-1/2 max-w-[85%] text-center" style={posStyle}>
-                        <span
+                      <>
+                        <div
+                          className="absolute left-1/2 text-center"
                           style={{
-                            background: captionStyle.bg || "transparent",
-                            color: captionStyle.textColor,
-                            fontWeight: captionStyle.weight,
-                            fontSize: `${0.95 * captionStyle.sizeScale}rem`,
-                            WebkitTextStroke: captionStyle.strokeColor ? `1.5px ${captionStyle.strokeColor}` : undefined,
-                            padding: captionStyle.bg ? "6px 14px" : 0,
-                            borderRadius: captionStyle.bg ? 8 : 0,
+                            ...posStyle,
+                            width: "92%",           // faixa larga — prioriza HORIZONTAL
+                            lineHeight: 1.15,       // compact line-height
                           }}
-                          className="inline-block"
                         >
-                          {text}
-                        </span>
-                      </div>
+                          <span
+                            style={{
+                              background: captionStyle.bg || (captionStyle.bgGradient ? `linear-gradient(90deg, ${captionStyle.bgGradient.from}, ${captionStyle.bgGradient.to})` : "transparent"),
+                              color: captionStyle.textColor,
+                              fontWeight: captionStyle.weight,
+                              fontFamily: captionStyle.fontFamily || "sans-serif",
+                              fontStyle: captionStyle.italic ? "italic" : "normal",
+                              fontSize: `${1.05 * captionStyle.sizeScale}rem`, // maior — mais presente
+                              letterSpacing: captionStyle.letterSpacing ? `${captionStyle.letterSpacing}em` : "normal",
+                              WebkitTextStroke: captionStyle.strokeColor ? `${captionStyle.strokeWidth || 1.5}px ${captionStyle.strokeColor}` : undefined,
+                              textShadow: captionStyle.shadow
+                                ? `0 ${captionStyle.shadow.offsetY || 2}px ${captionStyle.shadow.blur || 6}px ${captionStyle.shadow.color || "rgba(0,0,0,0.7)"}`
+                                : undefined,
+                              padding: (captionStyle.bg || captionStyle.bgGradient) ? "0.35em 0.7em" : 0,
+                              borderRadius: (captionStyle.bg || captionStyle.bgGradient) ? (captionStyle.pillRadius ?? 8) : 0,
+                              border: captionStyle.borderColor && captionStyle.borderWidth ? `${captionStyle.borderWidth}px solid ${captionStyle.borderColor}` : undefined,
+                              display: "inline-block",   // cresce só no que precisa
+                              maxWidth: "100%",
+                              // HARD CAP 2 linhas visualmente:
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                              wordBreak: "normal",
+                              overflowWrap: "break-word",
+                            }}
+                          >
+                            {text}
+                          </span>
+                        </div>
+                        {debugMode && (
+                          <div className="absolute top-1 left-1 text-[10px] font-mono" style={{ color: "#FFD400", background: "rgba(0,0,0,0.7)", padding: "2px 4px", borderRadius: 3, pointerEvents: "none" }}>
+                            pos={captionPosition} y={posStyle.top} w=92% cap={activeCaption.words?.length || 0}w
+                          </div>
+                        )}
+                      </>
                     );
                   })()}
                 </div>
@@ -2917,20 +2947,34 @@ async function callMistakeDetectionAPI(words) {
                       {formatTime(currentTime)} / {formatTime(duration)}
                     </span>
                     {edl.length > 0 && (
-                      <button
-                        onClick={togglePreviewMode}
-                        title={previewMode
-                          ? "Voltar ao vídeo original mostrando as sugestões da IA"
-                          : "Ver como o vídeo fica com todos os cortes aplicados"}
-                        style={{
-                          background: previewMode ? "#2E7D4F" : "#FF6A2B",
-                          color: previewMode ? "#FFFFFF" : "#1A0A02",
-                          border: "none",
-                        }}
-                        className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-bold shadow"
-                      >
-                        {previewMode ? "◀ Voltar ao original" : "▶ Ver vídeo editado"}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setPreviewMode(false)}
+                          title="Vídeo bruto com as sugestões da IA marcadas"
+                          style={{
+                            background: !previewMode ? "#FF6A2B" : "#1B1B21",
+                            color: !previewMode ? "#1A0A02" : "#C9C9D1",
+                            border: !previewMode ? "none" : "1px solid #26262E",
+                          }}
+                          className="flex flex-col items-center leading-tight px-3 py-1 rounded-md font-bold shadow"
+                        >
+                          <span className="text-[11px]">Vídeo original</span>
+                          <span className="text-[10px] tabular-nums opacity-80">{formatTime(duration)}</span>
+                        </button>
+                        <button
+                          onClick={() => setPreviewMode(true)}
+                          title="Vídeo compilado com todos os cortes aplicados"
+                          style={{
+                            background: previewMode ? "#2E7D4F" : "#1B1B21",
+                            color: previewMode ? "#FFFFFF" : "#C9C9D1",
+                            border: previewMode ? "none" : "1px solid #26262E",
+                          }}
+                          className="flex flex-col items-center leading-tight px-3 py-1 rounded-md font-bold shadow"
+                        >
+                          <span className="text-[11px]">Vídeo editado</span>
+                          <span className="text-[10px] tabular-nums opacity-80">{formatTime(finalDuration)}</span>
+                        </button>
+                      </div>
                     )}
                     <span style={{ color: "#5C5C66" }} className="text-xs truncate ml-auto">{fileName}</span>
                     <button onClick={() => fileInputRef.current?.click()} style={{ color: "#9A9AA5" }} className="text-xs flex items-center gap-1 flex-shrink-0">
