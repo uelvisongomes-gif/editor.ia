@@ -3838,12 +3838,6 @@ async function callMistakeDetectionAPI(words) {
                     </button>
                   ))}
                 </div>
-                <div className="flex items-start gap-1.5 mb-3" style={{ color: "#9A9AA5" }}>
-                  <Info size={12} className="mt-0.5 flex-shrink-0" />
-                  <p className="text-[11px] leading-snug">
-                    Processado no seu navegador. O arquivo gerado é .webm (compatível com a maioria dos players e navegadores).
-                  </p>
-                </div>
                 <button
                   onClick={handleExport}
                   disabled={isExporting}
@@ -4018,21 +4012,43 @@ function PlatformChips({ platforms, selected, onToggle }) {
   );
   const hasMultipleRatios = selectedRatios.size > 1;
 
+  // TikTok/Shorts/Reels são todos 9:16 — 1 tick só ativa os 3.
+  const verticalIds = [tiktok?.id, shorts?.id, reels?.id].filter(Boolean);
+  const verticalOn = verticalIds.some((id) => selected.includes(id));
+  const toggleVertical = () => {
+    if (verticalOn) verticalIds.forEach((id) => selected.includes(id) && onToggle(id));
+    else verticalIds.forEach((id) => !selected.includes(id) && onToggle(id));
+  };
+
+  const VerticalBox = () => (
+    <button
+      onClick={toggleVertical}
+      title="TikTok · Shorts · Reels (9:16)"
+      className="flex items-center gap-2 text-xs font-semibold"
+      style={{ color: verticalOn ? "#F5F5F7" : "#9A9AA5" }}
+    >
+      <span
+        style={{
+          width: 14, height: 14,
+          border: verticalOn ? "1.5px solid #FF6A2B" : "1.5px solid #4A4A54",
+          background: verticalOn ? "#FF6A2B" : "transparent",
+          borderRadius: 3,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+        }}
+      >
+        {verticalOn && <span style={{ color: "#1A0A02", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>✓</span>}
+      </span>
+      <span>TikTok · Shorts · Reels</span>
+    </button>
+  );
+
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-4">
-        <Box id={feed?.id} label="Feed Insta" />
-        <Box id={youtube?.id} label="YouTube" />
-      </div>
-      <div className="flex items-center gap-1.5 text-xs font-semibold flex-wrap">
-        <Box id={tiktok?.id} label="TikTok" />
-        <span style={{ color: "#4A4A54" }}>-</span>
-        <Box id={shorts?.id} label="Shorts" />
-        <span style={{ color: "#4A4A54" }}>-</span>
-        <Box id={reels?.id} label="Reels" />
-      </div>
+    <div className="flex items-center gap-4 flex-wrap">
+      <Box id={feed?.id} label="Feed Insta" />
+      <Box id={youtube?.id} label="YouTube" />
+      <VerticalBox />
       {hasMultipleRatios && (
-        <p style={{ color: "#FFB020" }} className="text-[10px] leading-snug flex items-start gap-1">
+        <p style={{ color: "#FFB020" }} className="text-[10px] leading-snug flex items-start gap-1 w-full">
           <AlertTriangle size={11} className="mt-0.5 flex-shrink-0" />
           Formatos diferentes — exportação usará {activeRatio}.
         </p>
