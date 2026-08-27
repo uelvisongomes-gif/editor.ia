@@ -75,6 +75,11 @@ Recebe abaixo uma lista de sentenças numeradas extraídas da fala de UM vídeo.
 
 4. "offTopicIndexes": sentenças que NÃO tocam o assunto principal. Uma história curta que ilustra o ponto NÃO é off-topic. Uma digressão evidente (interrompeu para falar de outra coisa) É.
 
+5. "speechErrors": defeitos de fala CURTOS (até ~15 palavras cada) identificados dentro das sentenças recebidas. Formato:
+   [{"sentenceIndex":N,"reason":"...","evidence":"trecho literal"}]
+   Categorias válidas: "stutter", "filler", "false_start", "abandoned_phrase", "self_correction".
+   Se NENHUM defeito claro existir, retorne [].
+
 REGRAS:
 - Prefira "consider_remove" apenas quando tiver certeza de que a sentença é dispensável e a remoção não vai quebrar o que vem depois.
 - Se a próxima sentença começa com "isso/ele/então/por isso/essa parte", a atual NÃO deve ser consider_remove.
@@ -107,7 +112,10 @@ Responda APENAS com um JSON válido, sem markdown, no formato exato:
   "repeatedGroups": [
     { "indexes": [3,5,9], "bestIndex": 5, "idea": "resumo curto da ideia" }
   ],
-  "offTopicIndexes": [12, 17]
+  "offTopicIndexes": [12, 17],
+  "speechErrors": [
+    { "sentenceIndex": 4, "reason": "stutter", "evidence": "eu eu acho" }
+  ]
 }
 
 Sentenças:
@@ -133,6 +141,7 @@ async function analyzeChunk(sentences, topicHint, { signal, onUsage } = {}) {
     sentences: Array.isArray(parsed.sentences) ? parsed.sentences : [],
     repeatedGroups: Array.isArray(parsed.repeatedGroups) ? parsed.repeatedGroups : [],
     offTopicIndexes: Array.isArray(parsed.offTopicIndexes) ? parsed.offTopicIndexes : [],
+    speechErrors: Array.isArray(parsed.speechErrors) ? parsed.speechErrors : [],
   };
 }
 
@@ -163,6 +172,7 @@ export async function analyzeSemantics(words, { signal, onUsage } = {}) {
   const merged = new Map(); // index -> classification
   const repeatedGroups = [];
   const offTopicIndexes = new Set();
+  const speechErrorsRaw = [];
 
   for (let ci = 0; ci < chunks.length; ci++) {
     if (signal?.aborted) throw new DOMException("Cancelado pelo usuário", "AbortError");
@@ -190,6 +200,9 @@ export async function analyzeSemantics(words, { signal, onUsage } = {}) {
     for (const i of result.offTopicIndexes) {
       if (Number.isFinite(i)) offTopicIndexes.add(i);
     }
+    for (const e of (result.speechErrors || [])) {
+      if (Number.isFinite(e?.sentenceIndex)) speechErrorsRaw.push(e);
+    }
   }
 
   const enriched = sentences.map((s) => {
@@ -205,10 +218,31 @@ export async function analyzeSemantics(words, { signal, onUsage } = {}) {
     if (last.role === "development") last.role = "conclusion";
   }
 
+  // Converte speechErrors {sentenceIndex, reason, evidence} para
+  // {start, end, reason, confidence, text, detectedBy} usando as bordas
+  // da sentença correspondente. Confidence fixa 0.8 (o heurístico já
+  // captura casos evidentes com conf > 0.85).
+  const byIdx = new Map(enriched.map((s) => [s.index, s]));
+  const speechErrors = [];
+  for (const e of speechErrorsRaw) {
+    const s = byIdx.get(e.sentenceIndex);
+    if (!s) continue;
+    speechErrors.push({
+      start: s.start,
+      end: s.end,
+      confidence: 0.8,
+      reason: e.reason || "filler",
+      source: "speechError",
+      detectedBy: "llm",
+      text: typeof e.evidence === "string" ? e.evidence : "",
+    });
+  }
+
   return {
     topic,
     sentences: enriched,
     repeatedGroups,
     offTopicIndexes: [...offTopicIndexes],
+    speechErrors,
   };
 }
