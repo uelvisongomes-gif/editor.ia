@@ -12,6 +12,21 @@ function fmtDur(s) {
   return `${mm}:${String(ss).padStart(2, "0")}`;
 }
 
+const FAV_STORAGE_KEY = "editoria.music.favorites.v1";
+
+function loadFavorites() {
+  try {
+    const raw = localStorage.getItem(FAV_STORAGE_KEY);
+    if (!raw) return {};
+    const data = JSON.parse(raw);
+    return data && typeof data === "object" ? data : {};
+  } catch { return {}; }
+}
+
+function saveFavorites(map) {
+  try { localStorage.setItem(FAV_STORAGE_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+}
+
 export function MusicLibrary({ selectedMusicId, onSelect, resolveTrack }) {
   const [query, setQuery] = useState("");
   const [categoryId, setCategoryId] = useState(null);
@@ -20,9 +35,26 @@ export function MusicLibrary({ selectedMusicId, onSelect, resolveTrack }) {
   const [remoteLoading, setRemoteLoading] = useState(false);
   const [remoteError, setRemoteError] = useState(null);
   const [uploadedTracks, setUploadedTracks] = useState([]);
+  // favoritesMap: { [trackId]: { ...trackObj } } — guarda o objeto inteiro
+  // (não só ID) pra que tracks do iTunes/upload/local sobrevivam sessões.
+  const [favoritesMap, setFavoritesMap] = useState(() => loadFavorites());
+  const [showFavorites, setShowFavorites] = useState(false);
   const audioRef = useRef(null);
   const fileInputRef = useRef(null);
   const searchTimerRef = useRef(null);
+
+  const toggleFavorite = (track) => {
+    setFavoritesMap((prev) => {
+      const next = { ...prev };
+      if (next[track.id]) delete next[track.id];
+      else next[track.id] = track;
+      saveFavorites(next);
+      return next;
+    });
+  };
+
+  const isFavorite = (trackId) => !!favoritesMap[trackId];
+  const favoritesList = useMemo(() => Object.values(favoritesMap), [favoritesMap]);
 
   const handleUpload = (files) => {
     const list = Array.from(files || []).filter((f) => f.type.startsWith("audio/"));
@@ -149,6 +181,14 @@ export function MusicLibrary({ selectedMusicId, onSelect, resolveTrack }) {
           </p>
         </div>
         <button
+          onClick={() => toggleFavorite(track)}
+          style={{ background: "transparent", color: isFavorite(track.id) ? "#FF3EA5" : "#5C5C66" }}
+          className="text-base flex-shrink-0 leading-none"
+          title={isFavorite(track.id) ? "Remover dos favoritos" : "Favoritar"}
+        >
+          {isFavorite(track.id) ? "♥" : "♡"}
+        </button>
+        <button
           onClick={() => handleSelect(track)}
           style={{
             background: isSelected ? "#FF6A2B" : "#1B1B21",
@@ -201,22 +241,33 @@ export function MusicLibrary({ selectedMusicId, onSelect, resolveTrack }) {
       {!showRemote && (
         <div className="flex flex-wrap gap-1 mb-2">
           <button
-            onClick={() => setCategoryId(null)}
+            onClick={() => { setCategoryId(null); setShowFavorites(false); }}
             style={{
-              background: categoryId === null ? "#FF6A2B" : "#1B1B21",
-              color: categoryId === null ? "#1A0A02" : "#C9C9D1",
+              background: (categoryId === null && !showFavorites) ? "#FF6A2B" : "#1B1B21",
+              color: (categoryId === null && !showFavorites) ? "#1A0A02" : "#C9C9D1",
             }}
             className="text-[10px] px-2 py-1 rounded font-semibold"
           >
             Tudo
           </button>
+          <button
+            onClick={() => { setShowFavorites((v) => !v); setCategoryId(null); }}
+            style={{
+              background: showFavorites ? "#FF3EA5" : "#1B1B21",
+              color: showFavorites ? "#1A0A02" : "#C9C9D1",
+            }}
+            className="text-[10px] px-2 py-1 rounded font-semibold"
+            title="Suas músicas favoritas"
+          >
+            ♥ Favoritos {favoritesList.length ? `(${favoritesList.length})` : ""}
+          </button>
           {MUSIC_CATEGORIES.map((c) => (
             <button
               key={c.id}
-              onClick={() => setCategoryId(c.id)}
+              onClick={() => { setCategoryId(c.id); setShowFavorites(false); }}
               style={{
-                background: categoryId === c.id ? "#FF6A2B" : "#1B1B21",
-                color: categoryId === c.id ? "#1A0A02" : "#C9C9D1",
+                background: (categoryId === c.id && !showFavorites) ? "#FF6A2B" : "#1B1B21",
+                color: (categoryId === c.id && !showFavorites) ? "#1A0A02" : "#C9C9D1",
               }}
               className="text-[10px] px-2 py-1 rounded font-semibold"
             >
@@ -250,6 +301,15 @@ export function MusicLibrary({ selectedMusicId, onSelect, resolveTrack }) {
                 </p>
               );
             })()}
+          </>
+        ) : showFavorites ? (
+          <>
+            {favoritesList.length ? favoritesList.map(renderTrack) : (
+              <p style={{ color: "#6B6B75" }} className="text-xs text-center py-4">
+                Nenhum favorito ainda.<br/>
+                Clique no coração ♡ das músicas pra salvar aqui.
+              </p>
+            )}
           </>
         ) : (
           <>
