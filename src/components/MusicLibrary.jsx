@@ -204,23 +204,6 @@ export function MusicLibrary({ selectedMusicId, onSelect, resolveTrack }) {
 
   return (
     <div>
-      {/* Upload de arquivo do usuário — trilha completa própria */}
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        style={{ background: "#0F0F13", border: "1px dashed #FF6A2B", color: "#FF6A2B" }}
-        className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold mb-2"
-      >
-        <span>⬆</span> Enviar sua música (MP3 · WAV)
-      </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="audio/*"
-        multiple
-        className="hidden"
-        onChange={(e) => handleUpload(e.target.files)}
-      />
-
       {/* Busca */}
       <div className="flex items-center gap-1.5 mb-2" style={{ background: "#0F0F13", border: "1px solid #1F1F26", borderRadius: 8, padding: "6px 10px" }}>
         <span style={{ color: "#5C5C66" }}>🔍</span>
