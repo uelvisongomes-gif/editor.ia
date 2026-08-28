@@ -2416,29 +2416,35 @@ async function callMistakeDetectionAPI(words) {
 
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div
-              style={{
-                width: 44, height: 44, borderRadius: 12,
-                background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)",
-                display: "grid", placeItems: "center",
-                boxShadow: "0 0 24px rgba(255,92,130,0.35)",
-                fontFamily: "'Inter Tight', sans-serif",
-                fontWeight: 900, fontSize: 20, color: "#0B0510",
-              }}
-            >C</div>
+            {/* Logo CRIE Studios como SVG inline — fundo transparente */}
+            <svg viewBox="0 0 260 108" style={{ height: 54, width: "auto", display: "block" }} aria-label="CRIE Studios">
+              <defs>
+                <linearGradient id="crie-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#FF6A2B" />
+                  <stop offset="100%" stopColor="#FF3EA5" />
+                </linearGradient>
+              </defs>
+              {/* CRIE letters — bold sans-serif */}
+              <text x="0" y="60" style={{
+                fontFamily: "'Inter Tight','Inter',sans-serif",
+                fontWeight: 900, fontSize: 62, letterSpacing: "0.06em", fill: "#F5EFFF",
+              }}>CRIE</text>
+              {/* Play triangle inside the C */}
+              <polygon points="30,35 30,63 54,49" fill="url(#crie-grad)" />
+              {/* Gradient bar inside the E (middle stroke) */}
+              <rect x="200" y="44" width="48" height="10" fill="url(#crie-grad)" />
+              {/* STUDIOS below in gradient tracked caps */}
+              <text x="24" y="94" style={{
+                fontFamily: "'Inter Tight','Inter',sans-serif",
+                fontWeight: 700, fontSize: 14, letterSpacing: "0.42em", fill: "url(#crie-grad)",
+              }}>STUDIOS</text>
+            </svg>
             <div>
-              <h1
-                style={{ fontFamily: "'Inter Tight', sans-serif", letterSpacing: "-0.01em" }}
-                className="text-2xl font-black leading-tight"
-              >
-                <span style={{ color: "#F5EFFF" }}>CRIE</span>{" "}
-                <span style={{
-                  background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)",
-                  WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-                }}>Studios</span>
-                <span style={{ color: "#7060A0", fontWeight: 500, fontSize: 12, letterSpacing: "0.14em", marginLeft: 8, textTransform: "uppercase" }}>Editor</span>
-              </h1>
-              <p style={{ color: "#A090B8" }} className="text-xs">Da ideia à publicação, em um só lugar</p>
+              <p style={{
+                fontFamily: "'Inter Tight',sans-serif",
+                color: "#A090B8", fontSize: 12,
+                letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 500,
+              }}>Editor · da ideia à publicação</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
