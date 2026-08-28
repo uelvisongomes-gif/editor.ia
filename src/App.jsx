@@ -2416,10 +2416,29 @@ async function callMistakeDetectionAPI(words) {
 
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Logo CRIE Studios" className="w-12 h-12 rounded-full flex-shrink-0 object-cover" />
+            <div
+              style={{
+                width: 44, height: 44, borderRadius: 12,
+                background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)",
+                display: "grid", placeItems: "center",
+                boxShadow: "0 0 24px rgba(255,92,130,0.35)",
+                fontFamily: "'Inter Tight', sans-serif",
+                fontWeight: 900, fontSize: 20, color: "#0B0510",
+              }}
+            >C</div>
             <div>
-              <h1 className="text-2xl font-extrabold leading-tight tracking-tight">EDIÇÃO DE VÍDEO COM IA</h1>
-              <p style={{ color: "#9A9AA5" }} className="text-xs">Corte, remova silêncios e gere legendas direto no navegador</p>
+              <h1
+                style={{ fontFamily: "'Inter Tight', sans-serif", letterSpacing: "-0.01em" }}
+                className="text-2xl font-black leading-tight"
+              >
+                <span style={{ color: "#F5EFFF" }}>CRIE</span>{" "}
+                <span style={{
+                  background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)",
+                  WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                }}>Studios</span>
+                <span style={{ color: "#7060A0", fontWeight: 500, fontSize: 12, letterSpacing: "0.14em", marginLeft: 8, textTransform: "uppercase" }}>Editor</span>
+              </h1>
+              <p style={{ color: "#A090B8" }} className="text-xs">Da ideia à publicação, em um só lugar</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -2429,7 +2448,7 @@ async function callMistakeDetectionAPI(words) {
                   onClick={doUndo}
                   disabled={!canUndo(history)}
                   title="Desfazer (Ctrl+Z)"
-                  style={{ background: "#131318", border: "1px solid #1F1F26", color: canUndo(history) ? "#C9C9D1" : "#4A4A54" }}
+                  style={{ background: "#12081C", border: "1px solid #1F1F26", color: canUndo(history) ? "#C9C9D1" : "#4A4A54" }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
                 >
                   <Undo2 size={13} /> ↶
@@ -2438,7 +2457,7 @@ async function callMistakeDetectionAPI(words) {
                   onClick={doRedo}
                   disabled={!canRedo(history)}
                   title="Refazer (Ctrl+Y)"
-                  style={{ background: "#131318", border: "1px solid #1F1F26", color: canRedo(history) ? "#C9C9D1" : "#4A4A54" }}
+                  style={{ background: "#12081C", border: "1px solid #1F1F26", color: canRedo(history) ? "#C9C9D1" : "#4A4A54" }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
                 >
                   <RotateCcw size={13} /> ↷
@@ -2447,7 +2466,7 @@ async function callMistakeDetectionAPI(words) {
             )}
             <button
               onClick={toggleExpand}
-              style={{ background: "#131318", border: "1px solid #1F1F26", color: "#C9C9D1" }}
+              style={{ background: "#12081C", border: "1px solid #1F1F26", color: "#C9C9D1" }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
             >
               {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
@@ -2474,7 +2493,7 @@ async function callMistakeDetectionAPI(words) {
             </div>
             <button
               onClick={() => fileInputRef.current?.click()}
-              style={{ background: "#FF6A2B", color: "#1A0A02" }}
+              style={{ background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)", color: "#1A0A02", boxShadow: "0 4px 20px rgba(255,92,130,0.3)" }}
               className="px-5 py-2 rounded-lg font-semibold text-sm mt-2"
             >
               Escolher vídeo
@@ -2502,7 +2521,7 @@ async function callMistakeDetectionAPI(words) {
                   <button
                     onClick={async () => { await deleteProject(p.id); setSavedProjects(await listProjects()); }}
                     title="Apagar"
-                    style={{ background: "#1B1B21", color: "#F09595" }}
+                    style={{ background: "#1A0F28", color: "#F09595" }}
                     className="px-2 py-2 rounded-lg text-xs"
                   >
                     <Trash2 size={12} />
@@ -2731,7 +2750,7 @@ async function callMistakeDetectionAPI(words) {
                         <span style={{ color: "#6B6B75" }} className="text-[10px]">Posição:</span>
                         {[["top", "Alta"], ["center", "Média"], ["bottom", "Baixa"]].map(([id, label]) => (
                           <button key={id} onClick={() => setCaptionPosition(id)}
-                            style={{ background: captionPosition === id ? "#FF6A2B" : "#1B1B21", color: captionPosition === id ? "#1A0A02" : "#C9C9D1" }}
+                            style={{ background: captionPosition === id ? "#FF6A2B" : "#1A0F28", color: captionPosition === id ? "#1A0A02" : "#C9C9D1" }}
                             className="text-[10px] px-2 py-0.5 rounded font-semibold">
                             {label}
                           </button>
@@ -2744,7 +2763,7 @@ async function callMistakeDetectionAPI(words) {
                   <button
                     onClick={runIntelligentEdit}
                     disabled={smartBusy}
-                    style={{ background: "#FF6A2B", color: "#1A0A02" }}
+                    style={{ background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)", color: "#1A0A02", boxShadow: "0 4px 20px rgba(255,92,130,0.3)" }}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold disabled:opacity-60"
                   >
                     {smartBusy ? <Loader2 size={16} className="animate-spin" /> : <Brain size={16} />}
@@ -2756,7 +2775,7 @@ async function callMistakeDetectionAPI(words) {
                       <p style={{ color: "#9A9AA5" }} className="text-xs mt-2">{smartStep}</p>
                       <button
                         onClick={cancelIntelligentEdit}
-                        style={{ background: "#1B1B21", color: "#F09595", border: "1px solid #5A2323" }}
+                        style={{ background: "#1A0F28", color: "#F09595", border: "1px solid #5A2323" }}
                         className="w-full mt-2 py-1.5 rounded-md text-xs font-semibold"
                       >
                         Cancelar análise
@@ -2822,7 +2841,7 @@ async function callMistakeDetectionAPI(words) {
                   <button
                     onClick={runAutoEdit}
                     disabled={autoEditBusy}
-                    style={{ background: "#FF6A2B", color: "#1A0A02" }}
+                    style={{ background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)", color: "#1A0A02", boxShadow: "0 4px 20px rgba(255,92,130,0.3)" }}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold disabled:opacity-60"
                   >
                     {autoEditBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
@@ -2834,7 +2853,7 @@ async function callMistakeDetectionAPI(words) {
                         <span>{formatTime(autoEditElapsed)}</span>
                         <span>-{formatTime(Math.max(0, autoEditEstimate - autoEditElapsed))}</span>
                       </div>
-                      <div style={{ background: "#1B1B21" }} className="w-full h-1.5 rounded-full overflow-hidden">
+                      <div style={{ background: "#1A0F28" }} className="w-full h-1.5 rounded-full overflow-hidden">
                         <div
                           style={{
                             background: "#FF6A2B",
@@ -2884,7 +2903,7 @@ async function callMistakeDetectionAPI(words) {
                   <button
                     onClick={removeSilence}
                     disabled={analyzing || silenceBusy}
-                    style={{ background: "#FF6A2B", color: "#1A0A02" }}
+                    style={{ background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)", color: "#1A0A02", boxShadow: "0 4px 20px rgba(255,92,130,0.3)" }}
                     className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold disabled:opacity-60"
                   >
                     {(analyzing || silenceBusy) ? <Loader2 size={15} className="animate-spin" /> : <Zap size={15} />}
@@ -2904,7 +2923,7 @@ async function callMistakeDetectionAPI(words) {
                   <button
                     onClick={transcribeAudio}
                     disabled={transcribing}
-                    style={{ background: "#1B1B21" }}
+                    style={{ background: "#1A0F28" }}
                     className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium mb-2 disabled:opacity-60"
                   >
                     {transcribing ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
@@ -2923,7 +2942,7 @@ async function callMistakeDetectionAPI(words) {
                   <button
                     onClick={detectMistakes}
                     disabled={findingMistakes}
-                    style={{ background: "#FF6A2B", color: "#1A0A02" }}
+                    style={{ background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)", color: "#1A0A02", boxShadow: "0 4px 20px rgba(255,92,130,0.3)" }}
                     className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold disabled:opacity-60"
                   >
                     {findingMistakes ? <Loader2 size={15} className="animate-spin" /> : <AlertTriangle size={15} />}
@@ -2995,7 +3014,7 @@ async function callMistakeDetectionAPI(words) {
                   <button
                     onClick={transcribeAudio}
                     disabled={transcribing}
-                    style={{ background: "#1B1B21" }}
+                    style={{ background: "#1A0F28" }}
                     className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium mb-2 disabled:opacity-60"
                   >
                     {transcribing ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
@@ -3014,7 +3033,7 @@ async function callMistakeDetectionAPI(words) {
                   <button
                     onClick={generateCaptions}
                     disabled={generatingCaptions}
-                    style={{ background: "#FF6A2B", color: "#1A0A02" }}
+                    style={{ background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)", color: "#1A0A02", boxShadow: "0 4px 20px rgba(255,92,130,0.3)" }}
                     className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold disabled:opacity-60"
                   >
                     {generatingCaptions ? <Loader2 size={15} className="animate-spin" /> : <MessageSquareText size={15} />}
@@ -3074,7 +3093,7 @@ async function callMistakeDetectionAPI(words) {
                     onChange={(v) => setColorAdjust((c) => ({ ...c, saturate: v }))} />
                   <button
                     onClick={() => setColorAdjust({ brightness: 100, contrast: 100, saturate: 100 })}
-                    style={{ background: "#1B1B21" }}
+                    style={{ background: "#1A0F28" }}
                     className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium mt-1"
                   >
                     <Undo2 size={14} /> Redefinir
@@ -3131,7 +3150,7 @@ async function callMistakeDetectionAPI(words) {
                 </div>
               )}
               {!metadataError && duration === 0 && (
-                <div style={{ background: "#131318", border: "1px solid #1F1F26", color: "#9A9AA5" }} className="rounded-xl p-3 text-xs">
+                <div style={{ background: "#12081C", border: "1px solid #1F1F26", color: "#9A9AA5" }} className="rounded-xl p-3 text-xs">
                   Carregando informações do vídeo... se isso não mudar em alguns segundos, tente outro arquivo (MP4 costuma ser o mais confiável).
                 </div>
               )}
@@ -3288,7 +3307,7 @@ async function callMistakeDetectionAPI(words) {
                   return (
                   <>
                     <div className="flex items-center gap-3 mt-3 flex-wrap">
-                      <button onClick={togglePlay} style={{ background: "#FF6A2B", color: "#1A0A02" }} className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0">
+                      <button onClick={togglePlay} style={{ background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)", color: "#1A0A02", boxShadow: "0 4px 20px rgba(255,92,130,0.3)" }} className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0">
                         {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
                       </button>
                       <span style={{ color: "#9A9AA5" }} className="text-xs tabular-nums">
@@ -3306,7 +3325,7 @@ async function callMistakeDetectionAPI(words) {
                           onClick={() => setPreviewMode(false)}
                           title="Vídeo bruto com as sugestões da IA marcadas"
                           style={{
-                            background: !previewMode ? "#FF6A2B" : "#1B1B21",
+                            background: !previewMode ? "#FF6A2B" : "#1A0F28",
                             color: !previewMode ? "#1A0A02" : "#C9C9D1",
                             border: !previewMode ? "none" : "1px solid #26262E",
                           }}
@@ -3319,7 +3338,7 @@ async function callMistakeDetectionAPI(words) {
                           onClick={() => setPreviewMode(true)}
                           title="Vídeo compilado com todos os cortes aplicados"
                           style={{
-                            background: previewMode ? "#2E7D4F" : "#1B1B21",
+                            background: previewMode ? "#2E7D4F" : "#1A0F28",
                             color: previewMode ? "#FFFFFF" : "#C9C9D1",
                             border: previewMode ? "none" : "1px solid #26262E",
                           }}
@@ -3361,7 +3380,7 @@ async function callMistakeDetectionAPI(words) {
                     </button>
                     <button
                       onClick={() => setTimelineZoom(1)}
-                      style={{ background: "#1B1B21", color: "#C9C9D1" }}
+                      style={{ background: "#1A0F28", color: "#C9C9D1" }}
                       className="text-[11px] font-medium px-2 py-1 rounded-lg"
                     >
                       Ajustar
@@ -3378,10 +3397,10 @@ async function callMistakeDetectionAPI(words) {
                 </div>
 
                 <div className="flex items-center gap-2 mb-3">
-                  <button onClick={handleCut} style={{ background: "#1B1B21" }} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium">
+                  <button onClick={handleCut} style={{ background: "#1A0F28" }} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium">
                     <Scissors size={13} /> Cortar no ponto atual
                   </button>
-                  <button onClick={resetSegments} style={{ background: "#1B1B21" }} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium">
+                  <button onClick={resetSegments} style={{ background: "#1A0F28" }} className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium">
                     <RotateCcw size={13} /> Restaurar tudo
                   </button>
                 </div>
@@ -3445,7 +3464,7 @@ async function callMistakeDetectionAPI(words) {
                             ))}
                           </div>
                         ) : (
-                          <div style={{ background: "#1B1B21" }} className="w-full h-3 rounded" />
+                          <div style={{ background: "#1A0F28" }} className="w-full h-3 rounded" />
                         )}
                       </div>
                     </div>
@@ -3703,7 +3722,7 @@ async function callMistakeDetectionAPI(words) {
                           {isOut ? "Zoom Out" : "Zoom In"} · {formatTime(ev.start)} → {formatTime(ev.end)} ({(ev.end - ev.start).toFixed(1)}s)
                         </span>
                         <div className="flex items-center gap-1">
-                          <button onClick={() => handlePlayRange(ev.start - 0.2, ev.end + 0.2)} style={{ background: "#1B1B21", color: "#C9C9D1" }} className="flex items-center gap-1 px-2 py-1 rounded text-[10px]">
+                          <button onClick={() => handlePlayRange(ev.start - 0.2, ev.end + 0.2)} style={{ background: "#1A0F28", color: "#C9C9D1" }} className="flex items-center gap-1 px-2 py-1 rounded text-[10px]">
                             <Play size={10} /> Ouvir
                           </button>
                           <button onClick={() => deleteZoomEvent(ev.id)} style={{ background: "#5A2A1E", color: "#FFB0A0" }} className="flex items-center gap-1 px-2 py-1 rounded text-[10px]">
@@ -3718,7 +3737,7 @@ async function callMistakeDetectionAPI(words) {
                           const active = ev.level === lv;
                           return (
                             <button key={lv} onClick={() => setZoomLevel(ev.id, lv)}
-                              style={{ background: active ? "#FF6A2B" : "#1B1B21", color: active ? "#1A0A02" : "#C9C9D1" }}
+                              style={{ background: active ? "#FF6A2B" : "#1A0F28", color: active ? "#1A0A02" : "#C9C9D1" }}
                               className="text-[10px] px-2 py-0.5 rounded font-semibold">
                               {spec.label}
                             </button>
@@ -3726,7 +3745,7 @@ async function callMistakeDetectionAPI(words) {
                         })}
                         <button
                           onClick={() => updateZoomEvent(ev.id, isOut ? { mode: "zoom_in", scale: ZOOM_LEVELS.medium.value, level: "medium" } : { mode: "zoom_out", scale: ZOOM_LEVELS.out_light.value, level: "out_light" })}
-                          style={{ background: "#1B1B21", color: "#78BAFF" }}
+                          style={{ background: "#1A0F28", color: "#78BAFF" }}
                           className="text-[10px] px-2 py-0.5 rounded font-semibold ml-2">
                           Trocar para {isOut ? "Zoom In" : "Zoom Out"}
                         </button>
@@ -3750,7 +3769,7 @@ async function callMistakeDetectionAPI(words) {
                         onClick={doUndo}
                         disabled={!canUndo(history)}
                         title="Desfazer (Ctrl+Z)"
-                        style={{ background: "#1B1B21", color: canUndo(history) ? "#C9C9D1" : "#4A4A54" }}
+                        style={{ background: "#1A0F28", color: canUndo(history) ? "#C9C9D1" : "#4A4A54" }}
                         className="px-2 py-1 rounded-md font-semibold flex items-center gap-1"
                       >
                         <Undo2 size={12} /> Desfazer
@@ -3759,7 +3778,7 @@ async function callMistakeDetectionAPI(words) {
                         onClick={doRedo}
                         disabled={!canRedo(history)}
                         title="Refazer (Ctrl+Y)"
-                        style={{ background: "#1B1B21", color: canRedo(history) ? "#C9C9D1" : "#4A4A54" }}
+                        style={{ background: "#1A0F28", color: canRedo(history) ? "#C9C9D1" : "#4A4A54" }}
                         className="px-2 py-1 rounded-md font-semibold flex items-center gap-1"
                       >
                         <RotateCcw size={12} /> Refazer
@@ -3768,7 +3787,7 @@ async function callMistakeDetectionAPI(words) {
                         <button
                           onClick={exportDiagnostic}
                           title="Exportar diagnóstico JSON"
-                          style={{ background: "#1B1B21", color: "#78BAFF" }}
+                          style={{ background: "#1A0F28", color: "#78BAFF" }}
                           className="px-2 py-1 rounded-md font-semibold flex items-center gap-1"
                         >
                           ⇩ JSON
@@ -3862,7 +3881,7 @@ async function callMistakeDetectionAPI(words) {
                     <button
                       key={r}
                       onClick={() => setResolution(r)}
-                      style={{ background: resolution === r ? "#FF6A2B" : "#1B1B21", color: resolution === r ? "#1A0A02" : "#F5F5F7" }}
+                      style={{ background: resolution === r ? "#FF6A2B" : "#1A0F28", color: resolution === r ? "#1A0A02" : "#F5F5F7" }}
                       className="py-1.5 rounded-lg text-xs font-semibold"
                     >
                       {r}
@@ -3872,21 +3891,21 @@ async function callMistakeDetectionAPI(words) {
                 <button
                   onClick={handleExport}
                   disabled={isExporting}
-                  style={{ background: "#FF6A2B", color: "#1A0A02" }}
+                  style={{ background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)", color: "#1A0A02", boxShadow: "0 4px 20px rgba(255,92,130,0.3)" }}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-bold disabled:opacity-60"
                 >
                   {isExporting ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
                   {isExporting ? `Exportando... ${exportProgress}%` : "Exportar vídeo"}
                 </button>
                 {isExporting && (
-                  <div style={{ background: "#1B1B21" }} className="w-full h-1.5 rounded-full mt-2 overflow-hidden">
+                  <div style={{ background: "#1A0F28" }} className="w-full h-1.5 rounded-full mt-2 overflow-hidden">
                     <div style={{ background: "#FF6A2B", width: `${exportProgress}%` }} className="h-full transition-all" />
                   </div>
                 )}
                 {exportError && <p style={{ color: "#FF8A8A" }} className="text-xs mt-2">{exportError}</p>}
                 {exportedUrl && (
                   <a href={exportedUrl} download={(fileName.replace(/\.[^.]+$/, "") || "video") + "-editado.webm"}
-                    style={{ background: "#1B1B21", color: "#5DCAA5" }}
+                    style={{ background: "#1A0F28", color: "#5DCAA5" }}
                     className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium mt-2">
                     <Download size={14} /> Baixar vídeo exportado
                   </a>
@@ -3912,7 +3931,7 @@ async function callMistakeDetectionAPI(words) {
             bottom: 24,
             left: "50%",
             transform: "translateX(-50%)",
-            background: "#1B1B21",
+            background: "#1A0F28",
             border: "1px solid #2A2A32",
             color: "#F5F5F7",
             padding: "8px 14px",
@@ -3935,7 +3954,7 @@ async function callMistakeDetectionAPI(words) {
 
 function Panel({ title, children }) {
   return (
-    <div style={{ background: "#131318", border: "1px solid #1F1F26" }} className="rounded-xl p-3.5">
+    <div style={{ background: "#12081C", border: "1px solid #1F1F26" }} className="rounded-xl p-3.5">
       {title && <h3 className="text-sm font-semibold mb-3">{title}</h3>}
       {children}
     </div>
@@ -3944,7 +3963,7 @@ function Panel({ title, children }) {
 
 function Badge({ icon, label }) {
   return (
-    <span style={{ background: "#131318", border: "1px solid #1F1F26", color: "#C9C9D1" }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium">
+    <span style={{ background: "#12081C", border: "1px solid #1F1F26", color: "#C9C9D1" }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium">
       {icon} {label}
     </span>
   );
@@ -3954,7 +3973,7 @@ function StepLabel({ n, text }) {
   return (
     <div className="flex items-center gap-1.5 mb-1.5">
       <span
-        style={{ background: "#FF6A2B", color: "#1A0A02" }}
+        style={{ background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)", color: "#1A0A02", boxShadow: "0 4px 20px rgba(255,92,130,0.3)" }}
         className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
       >
         {n}
@@ -4112,7 +4131,7 @@ function QualityGauge({ score, label }) {
             <stop offset="100%" stopColor="#FF2FA0" />
           </linearGradient>
         </defs>
-        <circle cx="50" cy="50" r={radius} fill="none" stroke="#1B1B21" strokeWidth="9" />
+        <circle cx="50" cy="50" r={radius} fill="none" stroke="#1A0F28" strokeWidth="9" />
         <circle
           cx="50" cy="50" r={radius} fill="none"
           stroke="url(#qualityGradient)" strokeWidth="9" strokeLinecap="round"

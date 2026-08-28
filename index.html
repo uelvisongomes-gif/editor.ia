@@ -3,11 +3,58 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Editor de vídeo com IA</title>
+    <title>CRIE Studios — Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Bebas+Neue&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800;900&family=Bebas+Neue&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --crie-bg: #08040E;
+        --crie-panel: #12081C;
+        --crie-elevated: #1A0F28;
+        --crie-hover: #241535;
+        --crie-stroke: #2A1A3E;
+        --crie-stroke-soft: #1F1030;
+        --crie-text: #F5EFFF;
+        --crie-text-muted: #A090B8;
+        --crie-text-dim: #7060A0;
+        --crie-orange: #FF6A2B;
+        --crie-pink: #FF3EA5;
+        --crie-purple: #8B5CF6;
+        --crie-gradient: linear-gradient(92deg, #FF6A2B 0%, #FF3EA5 100%);
+        --crie-glow: 0 0 24px rgba(255, 92, 130, 0.35);
+      }
+      html, body {
+        background:
+          radial-gradient(ellipse 1200px 700px at 20% -10%, rgba(255, 62, 165, 0.10), transparent 60%),
+          radial-gradient(ellipse 900px 600px at 100% 100%, rgba(255, 106, 43, 0.08), transparent 60%),
+          var(--crie-bg);
+        color: var(--crie-text);
+        font-family: 'Inter', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+      }
+      h1, h2, h3, .crie-display {
+        font-family: 'Inter Tight', 'Inter', system-ui, sans-serif;
+        letter-spacing: -0.005em;
+      }
+      /* Aplica gradient CRIE aonde tiver o laranja original em botoes CTA */
+      .crie-cta {
+        background: var(--crie-gradient) !important;
+        box-shadow: var(--crie-glow) !important;
+      }
+      .crie-logo {
+        background: var(--crie-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-family: 'Inter Tight', sans-serif;
+        font-weight: 900;
+      }
+      /* Glow em elementos ativos */
+      .crie-active-glow { box-shadow: var(--crie-glow); }
+    </style>
   </head>
   <body>
     <div id="root"></div>
