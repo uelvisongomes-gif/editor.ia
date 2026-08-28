@@ -4088,12 +4088,12 @@ function PlatformChips({ platforms, selected, onToggle }) {
       >
         {verticalOn && <span style={{ color: "#1A0A02", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>✓</span>}
       </span>
-      <span className="whitespace-nowrap">TikTok · Shorts · Reels</span>
+      <span className="whitespace-nowrap">Shorts</span>
     </button>
   );
 
   return (
-    <div className="flex items-center gap-3 flex-nowrap overflow-x-auto">
+    <div className="flex items-center gap-3 flex-wrap">
       <Box id={feed?.id} label="Feed" />
       <Box id={youtube?.id} label="YouTube" />
       <VerticalBox />
