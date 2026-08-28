@@ -4088,7 +4088,7 @@ function PlatformChips({ platforms, selected, onToggle }) {
       >
         {verticalOn && <span style={{ color: "#1A0A02", fontSize: 10, fontWeight: 900, lineHeight: 1 }}>✓</span>}
       </span>
-      <span className="whitespace-nowrap">Shorts</span>
+      <span className="whitespace-nowrap">TikTok · Reels</span>
     </button>
   );
 
