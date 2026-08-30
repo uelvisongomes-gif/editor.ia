@@ -17,7 +17,11 @@ const RULES = {
   pulseThresholdSec: 1.5,
   visualGapMaxSec: 15.0,
   scaleMin: 1.05,
-  scaleMax: 1.35,
+  scaleMax: 1.55,   // strong é 1.52 (face-fill) — permite
+  // QC visual expandido (Item 25):
+  maxEffectsPerSecond: 2,   // não mais que 2 estímulos concorrentes
+  maxTransitionsPerMin: 8,
+  minSpaceBetweenBrolls: 3, // segundos entre B-rolls consecutivos
 };
 
 /**

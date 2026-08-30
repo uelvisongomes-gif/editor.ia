@@ -18,6 +18,49 @@ const DEFAULTS = {
   naturalBreakGapSec: 0.45, // exige pausa mais clara pra fechar cue
 };
 
+// Palavras de ALTO valor que sempre viram emphasis se aparecerem numa cue
+// (Item 12 · Keyword highlight expandido).
+const CTA_WORDS = new Set([
+  "siga", "segue", "salva", "salve", "comenta", "comente", "compartilha",
+  "compartilhe", "clica", "clique", "compra", "compre", "envia", "envie",
+  "cadastra", "cadastre", "cadastre-se", "assina", "assine", "baixa", "baixe",
+  "acessa", "acesse", "conheca", "conheça", "aproveita", "aproveite",
+  "corre", "garanta", "aprenda", "descubra",
+]);
+const BENEFIT_WORDS = new Set([
+  "grátis", "gratis", "gratuito", "hoje", "agora", "primeiro", "único",
+  "unico", "exclusivo", "melhor", "novo", "novidade", "desconto", "oferta",
+  "resultado", "solução", "solucao", "resposta", "chave",
+]);
+const CONTRAST_WORDS = new Set([
+  "antes", "depois", "mas", "porém", "porem", "entretanto", "no entanto",
+  "diferente", "contrário", "contrario", "oposto", "invés", "inves",
+]);
+
+/**
+ * Detecta se uma palavra é "keyword" de destaque (números/valores/CTA/etc).
+ * Prioridade sobre a heurística "última palavra de conteúdo".
+ * @returns {number|null} boost 0-1 (null = não é keyword)
+ */
+export function keywordBoost(word) {
+  if (!word) return null;
+  const raw = String(word).trim();
+  const clean = raw.toLowerCase().replace(/[.,!?;:()"']/g, "");
+  // Número (incl. porcentagens, valores, ordinal)
+  if (/^\d+([.,]\d+)?%?$/.test(clean)) return 0.95;
+  if (/^R\$/.test(raw) || /^\$/.test(raw) || /^€/.test(raw)) return 0.95;
+  if (/\d/.test(clean) && clean.length <= 8) return 0.80; // "5x", "24h"
+  // CTA
+  if (CTA_WORDS.has(clean)) return 0.90;
+  // Benefício
+  if (BENEFIT_WORDS.has(clean)) return 0.75;
+  // Contraste
+  if (CONTRAST_WORDS.has(clean)) return 0.65;
+  // Palavra CAPS LOCK (usuário enfatizou)
+  if (raw.length >= 3 && raw === raw.toUpperCase() && /[A-Z]/.test(raw)) return 0.80;
+  return null;
+}
+
 // Palavras "fracas" — nunca terminar cue nelas (fica orfão visual).
 const CONNECTORS = new Set([
   "e", "o", "a", "os", "as", "de", "da", "do", "das", "dos",
@@ -185,12 +228,25 @@ export function pickEmphasisWordIndex(cueWords) {
   if (!cueWords?.length) return -1;
   const cleaned = cueWords.map((w) => cleanWord(w.word));
 
+  // Prioridade 1: keyword boost (números, CTA, benefício, contraste, CAPS)
+  // Retorna o de maior boost.
+  let bestIdx = -1;
+  let bestBoost = 0;
+  for (let i = 0; i < cueWords.length; i++) {
+    const boost = keywordBoost(cueWords[i].word);
+    if (boost && boost > bestBoost) { bestBoost = boost; bestIdx = i; }
+  }
+  if (bestIdx >= 0) return bestIdx;
+
+  // Prioridade 2: IMPACT markers
   for (let i = 0; i < cleaned.length; i++) {
     if (IMPACT_MARKERS.some((m) => cleaned[i] === m)) return i;
   }
+  // Prioridade 3: EMPHASIS markers
   for (let i = 0; i < cleaned.length; i++) {
     if (EMPHASIS_MARKERS.some((m) => cleaned[i] === m)) return i;
   }
+  // Fallback: última palavra de conteúdo
   for (let i = cleaned.length - 1; i >= 0; i--) {
     if (!CONNECTORS.has(cleaned[i]) && cleaned[i].length >= 4) return i;
   }
