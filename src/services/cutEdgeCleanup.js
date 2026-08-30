@@ -157,11 +157,36 @@ export function cleanupCutEdges(edl, words) {
   //     o fonema inicial da próxima palavra.
   const TIGHTEN_LEFT = 0.03;
   const TIGHTEN_RIGHT = 0.01;
+  // Palavras de 1-2 char que quando têm duração LONGA (>250ms) são
+  // hesitações mascaradas: Whisper transcreveu "haaaa" como "a" ou "eee"
+  // como "e". Normal "a" isolado dura ~100-200ms.
+  const FAKE_WORD_MAX_LEN = 2;
+  const FAKE_WORD_MIN_DUR = 0.25;
   let tightened = 0;
   for (const cut of filtered) {
     if (cut.action !== "remove" && cut.action !== "trim") continue;
     const prevWord = wordEndingBefore(cut.start, words);
-    const nextWord = wordStartingAfter(cut.end, words);
+    let nextWord = wordStartingAfter(cut.end, words);
+
+    // ANTES do tighten: se próxima palavra parece hesitação mascarada
+    // (curta em chars mas longa em duração), engole ela e considera a
+    // palavra SEGUINTE como próxima real.
+    while (nextWord) {
+      const cleanedChars = normalize(nextWord.word).length;
+      const dur = nextWord.end - nextWord.start;
+      const looksLikeHesitation = cleanedChars <= FAKE_WORD_MAX_LEN && dur >= FAKE_WORD_MIN_DUR;
+      if (!looksLikeHesitation) break;
+      cut.end = nextWord.end;
+      cut._swallowedFakeWord = {
+        word: nextWord.word,
+        durationMs: Math.round(dur * 1000),
+        reason: "single_char_word_too_long_is_hesitation",
+      };
+      tightened += 1;
+      // Recompute next word after swallowing
+      nextWord = wordStartingAfter(cut.end, words);
+    }
+
     if (prevWord && prevWord.end < cut.start - TIGHTEN_LEFT) {
       const oldStart = cut.start;
       cut.start = prevWord.end + TIGHTEN_LEFT;
