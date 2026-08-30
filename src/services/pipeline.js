@@ -24,6 +24,8 @@ import { snapAllCutsToWordBoundaries } from "./wordBoundarySafety.js";
 import { cleanupCutEdges } from "./cutEdgeCleanup.js";
 import { buildVisualPlan } from "./visualDirector.js";
 import { buildVisualTimeline } from "./visualTimeline.js";
+import { buildBrollPlan } from "./brollDirector.js";
+import { buildGraphicsPlan } from "./graphicsDirector.js";
 
 const STEPS = {
   transcribe: "Transcrevendo o áudio...",
@@ -165,16 +167,26 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   }
   console.log("[pipeline] integrity summary:", integrity.summary);
 
-  // Visual timeline unificado — junta cortes + zooms + captions em uma lista
-  // cronológica única (Item 22). Usado por QC e UI.
+  // B-Roll director — sugestões de apoio visual (não busca mídia, só recomenda)
+  const brollPlan = buildBrollPlan({ narrative, segments, profile });
+  console.log(`[pipeline] brollPlan: ${brollPlan.summary.emitted}/${brollPlan.summary.totalCandidates} sugestões`);
+
+  // Graphics director — big numbers, text overlays, callouts
+  const graphicsPlan = buildGraphicsPlan({ words, narrative, segments, profile });
+  console.log(`[pipeline] graphicsPlan: ${graphicsPlan.summary.emitted} overlays (${graphicsPlan.summary.big_numbers} números, ${graphicsPlan.summary.text_overlays} texto)`);
+
+  // Visual timeline unificado — junta cortes + zooms + captions + broll + text
   const visualTimeline = buildVisualTimeline({
-    segments, zoomEvents, captionEvents: [], brollEvents: [], textOverlays: [],
+    segments, zoomEvents, captionEvents: [],
+    brollEvents: brollPlan.suggestions,
+    textOverlays: graphicsPlan.overlays,
   });
   console.log(`[pipeline] visualTimeline: ${visualTimeline.total} eventos (${JSON.stringify(visualTimeline.counts)})`);
 
   return {
     words, waveform, speechActivity, semantic, narrative, edl, segments, profile,
     problemCandidates, zoomEvents, integrity, debugReport, visualPlan, visualTimeline,
+    brollPlan, graphicsPlan,
   };
 }
 
