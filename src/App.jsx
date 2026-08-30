@@ -3314,6 +3314,62 @@ async function callMistakeDetectionAPI(words) {
                       </>
                     );
                   })()}
+
+                  {/* Graphics overlays: big_number + text_overlay ativos no timestamp */}
+                  {graphicsPlan?.overlays?.filter((o) => currentTime >= o.start && currentTime <= o.end).map((o, i) => (
+                    <div
+                      key={"gfx-" + i}
+                      className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+                      style={{
+                        top: o.kind === "big_number" ? "18%" : "28%",
+                        textAlign: "center",
+                        animation: "fadeIn 0.25s ease-out",
+                      }}
+                    >
+                      {o.kind === "big_number" ? (
+                        <div style={{
+                          fontFamily: "'Archivo Black','Inter Tight',sans-serif",
+                          fontSize: "clamp(48px, 10vw, 120px)",
+                          fontWeight: 900,
+                          lineHeight: 1,
+                          background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)",
+                          WebkitBackgroundClip: "text",
+                          WebkitTextFillColor: "transparent",
+                          textShadow: "0 4px 24px rgba(255,62,165,0.5)",
+                          whiteSpace: "pre-line",
+                        }}>{o.text}</div>
+                      ) : (
+                        <div style={{
+                          fontFamily: "'Archivo Black','Inter Tight',sans-serif",
+                          fontSize: "clamp(24px, 5vw, 48px)",
+                          fontWeight: 900,
+                          background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)",
+                          color: "#150610",
+                          padding: "6px 16px",
+                          borderRadius: 8,
+                          boxShadow: "0 8px 32px rgba(255,62,165,0.4)",
+                          display: "inline-block",
+                        }}>{o.text}</div>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* B-roll placeholders (mostra tag no canto quando um B-roll está ativo) */}
+                  {brollPlan?.suggestions?.filter((b) => currentTime >= b.start && currentTime <= b.end).map((b, i) => (
+                    <div
+                      key={"br-" + i}
+                      className="absolute top-2 right-2 pointer-events-none"
+                      style={{
+                        background: "rgba(120,186,255,0.9)",
+                        color: "#0A1A28",
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        fontFamily: "'Inter Tight',sans-serif",
+                      }}
+                    >📹 B-ROLL: {b.query}</div>
+                  ))}
                 </div>
                 {showingEdited && editedVideoUrl && (
                   <div
