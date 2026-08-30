@@ -22,6 +22,7 @@ import { checkEditingIntegrity } from "./editingIntegrityCheck.js";
 import { buildDebugReport } from "./editingDebugReport.js";
 import { snapAllCutsToWordBoundaries } from "./wordBoundarySafety.js";
 import { cleanupCutEdges } from "./cutEdgeCleanup.js";
+import { buildVisualPlan } from "./visualDirector.js";
 
 const STEPS = {
   transcribe: "Transcrevendo o áudio...",
@@ -138,6 +139,18 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   step("compile");
   const segments = compileTimeline(edlCleaned);
 
+  // Visual Director — decisão central visual (recomendações, não executa).
+  // Fica ANTES do smartZoom pra que o zoom possa consumir sugestões
+  // no futuro; por ora smartZoom continua com sua própria heurística.
+  const visualPlan = buildVisualPlan({
+    narrative,
+    segments,
+    zoomEvents: [],       // ainda não computados nesse ponto
+    captionEvents: [],
+    profile,
+  });
+  console.log(`[pipeline] visualPlan: ${visualPlan.summary.decisionsEmitted}/${visualPlan.summary.totalItemsAnalyzed} decisões (modo ${visualPlan.summary.mode})`);
+
   // SmartZoom — derivado da análise já feita. Sem chamada LLM extra.
   const zoomEvents = computeZoomEvents({ semantic, segments, profile });
   console.log("[pipeline] zoomEvents:", zoomEvents.length, zoomEvents);
@@ -153,7 +166,7 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
 
   return {
     words, waveform, speechActivity, semantic, narrative, edl, segments, profile,
-    problemCandidates, zoomEvents, integrity, debugReport,
+    problemCandidates, zoomEvents, integrity, debugReport, visualPlan,
   };
 }
 
