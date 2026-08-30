@@ -56,16 +56,34 @@ function sentenceScore(sentence) {
   return computeEmphasis(sentence).score;
 }
 
-// Decide o nível (light/medium/strong) baseado no score e no papel.
+// Decide o nível (light/medium/strong) baseado no score, papel e
+// importância. Roles fortes da Fase 2 (turn/cta/hook + importance=critical)
+// merecem strong direto.
 function pickLevel(sentence, score) {
   const text = normalize(sentence.text);
   const impactHits = IMPACT_MARKERS.filter((m) => text.includes(m)).length;
-  const isCta = sentence.role === "cta";
+  const isCritical = sentence.importance === "critical";
   const isHighImportance = sentence.importance === "high";
-  if (score >= 0.85 && (impactHits >= 1 || isCta)) return "strong";
+  const strongRoles = new Set(["turn", "cta", "point", "solution", "hook"]);
+  const mediumRoles = new Set(["problem", "proof", "conclusion"]);
+
+  // Trechos críticos com role forte → strong direto
+  if (isCritical && strongRoles.has(sentence.role)) return "strong";
+  if (score >= 0.85 && (impactHits >= 1 || strongRoles.has(sentence.role))) return "strong";
+  if (isCritical) return "medium";
   if (score >= 0.75 && isHighImportance) return "medium";
+  if (mediumRoles.has(sentence.role) && isHighImportance) return "medium";
   if (score >= 0.65) return "medium";
   return "light";
+}
+
+// Skip: trecho é aside/off_topic OU tem weakness (redundant/no_value/etc)
+// — não merece zoom sequer.
+function shouldSkipZoom(sentence) {
+  if (!sentence) return true;
+  if (sentence.role === "aside" || sentence.role === "off_topic") return true;
+  if (sentence.weakness) return true;
+  return false;
 }
 
 function pickScale(level) {
@@ -130,6 +148,8 @@ export function computeZoomEvents({ semantic, segments, profile }) {
 
       // Fim da unidade de fala: sentence que contém cutPoint, ou a próxima.
       let containing = sentenceAt(cutPoint) || sentenceStartingAfter(cutPoint);
+      // Contextual skip: se sentence é aside/off_topic/weakness, não dá zoom.
+      if (shouldSkipZoom(containing)) continue;
       let sentenceEnd = containing ? containing.end : cutPoint + 3.0;
 
       // Duração = até fim da unidade, clamped, e nunca ultrapassa segmento.
@@ -138,17 +158,20 @@ export function computeZoomEvents({ semantic, segments, profile }) {
       dur = Math.min(dur, segEnd - cutPoint - 0.1);
       if (dur < CUT_ZOOM_MIN_DUR) continue;
 
+      // Contextual level — cut zoom em role/importance forte vira medium/strong
+      const contextualLevel = containing ? pickLevel(containing, sentenceScore(containing)) : "light";
+      const level = contextualLevel === "strong" ? "medium" : contextualLevel; // limita strong só pra gaps (pattern interrupt)
       events.push({
         id: nextId(),
         type: "zoom",
         mode: "zoom_in",
         start: cutPoint,
         end: cutPoint + dur,
-        scale: ZOOM_LEVELS.light.value,
+        scale: ZOOM_LEVELS[level].value,
         fadeIn: 0.15,
-        fadeOut: Math.max(0.4, fade), // retorno suave — nunca cliff
+        fadeOut: Math.max(0.4, fade),
         reason: "cut_transition",
-        level: "light",
+        level,
         confidence: 1.0,
         sentenceIndex: containing?.index ?? null,
         text: containing?.text || "",
@@ -181,6 +204,7 @@ export function computeZoomEvents({ semantic, segments, profile }) {
       const candidates = sentences
         .filter((s) => s.start >= searchFrom && s.start < searchTo)
         .filter((s) => inActiveSegment(s.start + 0.15))
+        .filter((s) => !shouldSkipZoom(s)) // pula aside/weakness
         .map((s) => ({ s, score: sentenceScore(s) }))
         .filter(({ score }) => score >= 0.35)
         .sort((a, b) => b.score - a.score);
