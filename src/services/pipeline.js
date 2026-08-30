@@ -21,6 +21,7 @@ import { computeZoomEvents } from "./smartZoom.js";
 import { checkEditingIntegrity } from "./editingIntegrityCheck.js";
 import { buildDebugReport } from "./editingDebugReport.js";
 import { snapAllCutsToWordBoundaries } from "./wordBoundarySafety.js";
+import { cleanupCutEdges } from "./cutEdgeCleanup.js";
 
 const STEPS = {
   transcribe: "Transcrevendo o áudio...",
@@ -127,8 +128,15 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
     return match ? { ...e, start: match.start, end: match.end, safety: match.safety } : e;
   }).filter((e) => e.action !== "remove" || (e.end - e.start > 0.05)); // remove cortes anulados
 
+  // Cut edge cleanup: se palavra imediatamente antes de um corte é
+  // igual à palavra imediatamente depois, estende o corte pra trás
+  // pra engolir a repetição no seam (ex: "porque falta [ideia stretched
+  // cortada] falta jeito" → "porque [falta ideia falta cortado] jeito").
+  const { edl: edlCleaned, extensions } = cleanupCutEdges(edlSafe, words);
+  if (extensions > 0) console.log(`[pipeline] cut edge cleanup: ${extensions} cortes estendidos por repetição de palavra`);
+
   step("compile");
-  const segments = compileTimeline(edlSafe);
+  const segments = compileTimeline(edlCleaned);
 
   // SmartZoom — derivado da análise já feita. Sem chamada LLM extra.
   const zoomEvents = computeZoomEvents({ semantic, segments, profile });
