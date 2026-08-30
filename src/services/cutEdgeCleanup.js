@@ -149,23 +149,28 @@ export function cleanupCutEdges(edl, words) {
   // Isso engole hesitações inaudíveis ("haaaa" residual, sons de boca,
   // respiração) que o Whisper não transcreveu mas que ainda vazam no
   // seam do corte causando "chatice auditiva".
-  const TIGHTEN_MARGIN = 0.03;
+  // Margens SEPARADAS pra cada lado:
+  //   TIGHTEN_LEFT — buffer atrás do REMOVE (respiração pré-defeito) 30ms
+  //   TIGHTEN_RIGHT — buffer no fim (antes da próxima palavra real) 10ms
+  //     Fica bem apertado porque hesitação residual ("haaaa" após stretched
+  //     word) fica no gap silence→next_word. Só deixa 10ms pra não cortar
+  //     o fonema inicial da próxima palavra.
+  const TIGHTEN_LEFT = 0.03;
+  const TIGHTEN_RIGHT = 0.01;
   let tightened = 0;
   for (const cut of filtered) {
     if (cut.action !== "remove" && cut.action !== "trim") continue;
     const prevWord = wordEndingBefore(cut.start, words);
     const nextWord = wordStartingAfter(cut.end, words);
-    // Encolhe pra trás: se há silêncio entre prevWord.end e cut.start, come.
-    if (prevWord && prevWord.end < cut.start - TIGHTEN_MARGIN) {
+    if (prevWord && prevWord.end < cut.start - TIGHTEN_LEFT) {
       const oldStart = cut.start;
-      cut.start = prevWord.end + TIGHTEN_MARGIN;
+      cut.start = prevWord.end + TIGHTEN_LEFT;
       cut._tightenedStart = { from: oldStart, to: cut.start };
       tightened += 1;
     }
-    // Estende pra frente: se há silêncio entre cut.end e nextWord.start, come.
-    if (nextWord && nextWord.start > cut.end + TIGHTEN_MARGIN) {
+    if (nextWord && nextWord.start > cut.end + TIGHTEN_RIGHT) {
       const oldEnd = cut.end;
-      cut.end = nextWord.start - TIGHTEN_MARGIN;
+      cut.end = nextWord.start - TIGHTEN_RIGHT;
       cut._tightenedEnd = { from: oldEnd, to: cut.end };
       tightened += 1;
     }
