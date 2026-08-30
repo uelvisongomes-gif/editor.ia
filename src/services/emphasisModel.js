@@ -13,9 +13,13 @@
 
 export const ROLE_WEIGHT = {
   point: 1.00,
+  turn: 0.98,          // virada narrativa é fortíssima
   cta: 0.95,
-  conclusion: 0.75,
-  hook: 0.45,
+  solution: 0.85,
+  hook: 0.80,          // subiu — gancho merece atenção visual
+  problem: 0.70,       // dor/desafio precisa de peso
+  proof: 0.65,         // evidência/exemplo/dado
+  conclusion: 0.60,
   development: 0.35,
   context: 0.20,
   aside: 0.00,
@@ -23,6 +27,7 @@ export const ROLE_WEIGHT = {
 };
 
 export const IMPORTANCE_WEIGHT = {
+  critical: 1.10,     // ultrapassa 1.0 — clamp em score final
   high: 1.00,
   medium: 0.55,
   low: 0.15,

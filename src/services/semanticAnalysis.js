@@ -61,16 +61,31 @@ Recebe abaixo uma lista de sentenças numeradas extraídas da fala de UM vídeo.
    - "index": índice recebido.
    - "role": papel narrativo — um de:
        "hook"        (abertura que prende atenção)
-       "context"     (situa o assunto)
+       "context"     (situa o assunto/apresenta o cenário)
+       "problem"     (dor/desafio/situação a resolver)
        "development" (explicação/desenvolvimento)
-       "point"       (insight/exemplo/ponto principal)
+       "proof"       (evidência/exemplo concreto/dado/case)
+       "turn"        (virada/mudança de perspectiva/plot twist)
+       "solution"    (resposta/técnica/método/como resolver)
+       "point"       (insight forte/frase de impacto)
        "conclusion"  (encerramento do raciocínio)
-       "cta"         (chamada para ação)
+       "cta"         (chamada para ação — siga/comente/salve/compre/etc)
        "aside"       (comentário paralelo breve)
        "off_topic"   (fora do assunto — use com cuidado)
-   - "importance": "high" | "medium" | "low".
+   - "importance": "critical" | "high" | "medium" | "low".
+       ("critical" = essencial pra narrativa não colapsar; pense em hook,
+       CTA, virada, main point. Nunca autocortável.)
+   - "confidence": 0-100 — quanto de certeza você tem sobre esse role.
    - "dependsOnPrev": true se a sentença só faz sentido junto da imediatamente anterior (pronome sem antecedente, "isso", "essa parte", conclusão que precisa do exemplo anterior).
    - "keepAdvice": "keep" | "trim" | "consider_remove" | "review".
+   - "weakness": null OU um de:
+       "redundant"        (repete ideia já dita)
+       "over_explanation" (explicação longa demais/circular)
+       "rhythm_break"     (quebra o ritmo — pausa desnecessária no meio do assunto)
+       "off_topic_drift"  (desvio leve do assunto)
+       "no_value"         (frase sem função narrativa)
+       "long_intro"       (introdução desnecessariamente longa antes do gancho real)
+       "repeated_conclusion" (fecha duas vezes o mesmo ponto)
 
 3. "repeatedGroups": conjuntos de sentenças que exprimem A MESMA IDEIA de formas parecidas e PODEM SUBSTITUIR UMA À OUTRA. Para cada grupo, escolha "bestIndex" (a versão mais clara). As demais são candidatas a remoção. NÃO agrupe complementos (ex: "vender por vídeo" + "vender por live" — são coisas diferentes, não repetição).
 
@@ -124,7 +139,7 @@ Responda APENAS com um JSON válido, sem markdown, no formato exato:
 {
   "topic": "assunto principal em uma frase",
   "sentences": [
-    { "index": 0, "role": "hook", "importance": "high", "dependsOnPrev": false, "keepAdvice": "keep" }
+    { "index": 0, "role": "hook", "importance": "critical", "confidence": 92, "dependsOnPrev": false, "keepAdvice": "keep", "weakness": null }
   ],
   "repeatedGroups": [
     { "indexes": [3,5,9], "bestIndex": 5, "idea": "resumo curto da ideia" }
@@ -201,6 +216,10 @@ export async function analyzeSemantics(words, { signal, onUsage } = {}) {
       merged.set(s.index, {
         role: typeof s.role === "string" ? s.role : "development",
         importance: typeof s.importance === "string" ? s.importance : "medium",
+        // Confidence 0-100 do LLM; se ausente, assume 70 (moderado).
+        roleConfidence: Number.isFinite(s.confidence) ? Math.max(0, Math.min(100, s.confidence)) : 70,
+        // Weakness = defeito narrativo detectado, se houver.
+        weakness: typeof s.weakness === "string" ? s.weakness : null,
         dependsOnPrev: !!s.dependsOnPrev,
         keepAdvice: typeof s.keepAdvice === "string" ? s.keepAdvice : "keep",
       });
