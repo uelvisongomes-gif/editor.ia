@@ -3359,22 +3359,33 @@ async function callMistakeDetectionAPI(words) {
                     </div>
                   ))}
 
-                  {/* B-roll placeholders (mostra tag no canto quando um B-roll está ativo) */}
-                  {brollPlan?.suggestions?.filter((b) => currentTime >= b.start && currentTime <= b.end).map((b, i) => (
-                    <div
-                      key={"br-" + i}
-                      className="absolute top-2 right-2 pointer-events-none"
-                      style={{
-                        background: "rgba(120,186,255,0.9)",
-                        color: "#0A1A28",
-                        padding: "4px 10px",
-                        borderRadius: 6,
-                        fontSize: 10,
-                        fontWeight: 700,
+                  {/* B-roll — se tem media real, renderiza vídeo em picture-in-picture. Senão só tag. */}
+                  {brollPlan?.suggestions?.filter((b) => currentTime >= b.start && currentTime <= b.end).map((b, i) => {
+                    const clip = b.media?.[0];
+                    if (clip?.url) {
+                      return (
+                        <div key={"br-" + i} className="absolute inset-0 pointer-events-none" style={{ opacity: 0.85 }}>
+                          <video
+                            src={clip.url}
+                            autoPlay muted loop playsInline
+                            style={{ width: "100%", height: "100%", objectFit: "cover", mixBlendMode: "normal" }}
+                          />
+                          <div className="absolute bottom-2 right-2" style={{
+                            background: "rgba(0,0,0,0.6)", color: "#fff",
+                            padding: "2px 8px", borderRadius: 4, fontSize: 9,
+                            fontFamily: "'Inter Tight',sans-serif",
+                          }}>{clip.attribution}</div>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={"br-" + i} className="absolute top-2 right-2 pointer-events-none" style={{
+                        background: "rgba(120,186,255,0.9)", color: "#0A1A28",
+                        padding: "4px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700,
                         fontFamily: "'Inter Tight',sans-serif",
-                      }}
-                    >📹 B-ROLL: {b.query}</div>
-                  ))}
+                      }}>📹 B-ROLL: {b.query}</div>
+                    );
+                  })}
                 </div>
                 {showingEdited && editedVideoUrl && (
                   <div

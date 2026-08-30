@@ -25,6 +25,7 @@ import { cleanupCutEdges } from "./cutEdgeCleanup.js";
 import { buildVisualPlan } from "./visualDirector.js";
 import { buildVisualTimeline } from "./visualTimeline.js";
 import { buildBrollPlan } from "./brollDirector.js";
+import { searchBrollMedia } from "./brollProvider.js";
 import { buildGraphicsPlan } from "./graphicsDirector.js";
 import { buildTransitionPlan } from "./transitionEngine.js";
 import { buildPatternInterrupts } from "./patternInterrupts.js";
@@ -175,9 +176,27 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   }
   console.log("[pipeline] integrity summary:", integrity.summary);
 
-  // B-Roll director — sugestões de apoio visual (não busca mídia, só recomenda)
+  // B-Roll director — sugestões de apoio visual
   const brollPlan = buildBrollPlan({ narrative, segments, profile });
   console.log(`[pipeline] brollPlan: ${brollPlan.summary.emitted}/${brollPlan.summary.totalCandidates} sugestões`);
+
+  // Enriquecer sugestões com mídia real do provider (Pixabay via proxy).
+  // Não bloqueia se falhar — sugestão fica sem media, App usa fallback tag.
+  const brollProvider = profile?.brollProvider || "pixabay";
+  if (brollPlan.suggestions.length && brollProvider !== "stub") {
+    onStep?.("broll_media", "Buscando B-roll no Pixabay...");
+    const enriched = await Promise.all(
+      brollPlan.suggestions.map(async (s) => {
+        try {
+          const media = await searchBrollMedia(s.query, { provider: brollProvider, limit: 3, type: "video" });
+          return { ...s, media };
+        } catch { return s; }
+      })
+    );
+    brollPlan.suggestions = enriched;
+    const withMedia = enriched.filter((s) => s.media?.length).length;
+    console.log(`[pipeline] brollPlan media: ${withMedia}/${enriched.length} enriquecidas via ${brollProvider}`);
+  }
 
   // Graphics director — big numbers, text overlays, callouts
   const graphicsPlan = buildGraphicsPlan({ words, narrative, segments, profile });
