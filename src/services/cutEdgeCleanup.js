@@ -155,7 +155,7 @@ export function cleanupCutEdges(edl, words) {
   //     Fica bem apertado porque hesitação residual ("haaaa" após stretched
   //     word) fica no gap silence→next_word. Só deixa 10ms pra não cortar
   //     o fonema inicial da próxima palavra.
-  const TIGHTEN_LEFT = 0.03;
+  const TIGHTEN_LEFT = 0.01;
   const TIGHTEN_RIGHT = 0.01;
   // Palavras de 1-2 char que quando têm duração LONGA (>250ms) são
   // hesitações mascaradas: Whisper transcreveu "haaaa" como "a" ou "eee"
