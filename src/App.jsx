@@ -3781,16 +3781,14 @@ async function callMistakeDetectionAPI(words) {
                       >
                         <RotateCcw size={12} /> Refazer
                       </button>
-                      {debugMode && (
-                        <button
-                          onClick={exportDiagnostic}
-                          title="Exportar diagnóstico JSON"
-                          style={{ background: "#1A0F28", color: "#78BAFF" }}
-                          className="px-2 py-1 rounded-md font-semibold flex items-center gap-1"
-                        >
-                          ⇩ JSON
-                        </button>
-                      )}
+                      <button
+                        onClick={exportDiagnostic}
+                        title="Exportar diagnóstico JSON — use pra reportar problemas"
+                        style={{ background: "#1A0F28", color: "#78BAFF" }}
+                        className="px-2 py-1 rounded-md font-semibold flex items-center gap-1"
+                      >
+                        ⇩ JSON
+                      </button>
                     </div>
                     <span style={{ color: saveState === "error" ? "#F09595" : saveState === "saving" ? "#FFB020" : "#5DCAA5" }}>
                       {saveState === "saving" ? "Salvando..." : saveState === "saved" ? "Salvo" : saveState === "error" ? "Erro ao salvar" : ""}
