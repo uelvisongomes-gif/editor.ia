@@ -29,6 +29,7 @@ import { buildGraphicsPlan } from "./graphicsDirector.js";
 import { buildTransitionPlan } from "./transitionEngine.js";
 import { buildPatternInterrupts } from "./patternInterrupts.js";
 import { detectProductMoments } from "./productTracking.js";
+import { buildProtectedRanges } from "./contextualProtections.js";
 
 const STEPS = {
   transcribe: "Transcrevendo o áudio...",
@@ -198,10 +199,15 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   const patternInterrupts = buildPatternInterrupts({ narrative, visualTimeline, profile });
   console.log(`[pipeline] patternInterrupts: ${patternInterrupts.summary.total} sugestões`);
 
+  // Contextual protections — consolida zonas protegidas (Items 5, 10, 17, 21)
+  const protectedRanges = buildProtectedRanges({ narrative, productMoments, brollPlan });
+  console.log(`[pipeline] protectedRanges: ${protectedRanges.summary.total} (${JSON.stringify(protectedRanges.summary.byKind)})`);
+
   return {
     words, waveform, speechActivity, semantic, narrative, edl, segments, profile,
     problemCandidates, zoomEvents, integrity, debugReport, visualPlan, visualTimeline,
     brollPlan, graphicsPlan, transitionPlan, patternInterrupts, productMoments,
+    protectedRanges,
   };
 }
 
