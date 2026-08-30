@@ -20,6 +20,7 @@ import { getProfile } from "./editingProfiles.js";
 import { computeZoomEvents } from "./smartZoom.js";
 import { checkEditingIntegrity } from "./editingIntegrityCheck.js";
 import { buildDebugReport } from "./editingDebugReport.js";
+import { snapAllCutsToWordBoundaries } from "./wordBoundarySafety.js";
 
 const STEPS = {
   transcribe: "Transcrevendo o áudio...",
@@ -107,15 +108,35 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   const { edl, problemCandidates } = buildEDL({ duration, words, semantic, silences, speechErrors, profile });
   console.log("[pipeline] problemCandidates:", problemCandidates.length, problemCandidates);
 
+  // Word-boundary safety net: garante que NENHUM corte cai no meio de
+  // palavra/fonema. Ajusta start/end pra bordas seguras (fim de palavra
+  // anterior / início de próxima). Cortes 100% dentro de palavra são
+  // cancelados.
+  const cutsBefore = edl.filter((e) => e.action === "remove" || e.action === "trim");
+  const { cuts: cutsSafe, adjustments, cancelled } = snapAllCutsToWordBoundaries(cutsBefore, words);
+  console.log(`[pipeline] word-boundary safety: ${adjustments} ajustes, ${cancelled} cancelados`);
+  // Re-monta a EDL substituindo os cortes ajustados.
+  const cutMap = new Map(cutsSafe.map((c) => [c.__origIndex ?? c.id ?? `${c.start}-${c.end}`, c]));
+  const edlSafe = edl.map((e) => {
+    if (e.action !== "remove" && e.action !== "trim") return e;
+    // acha equivalente por id/originalStart
+    const match = cutsSafe.find((c) =>
+      (c.id && e.id && c.id === e.id) ||
+      Math.abs((c.safety?.originalStart ?? c.start) - e.start) < 0.01
+    );
+    return match ? { ...e, start: match.start, end: match.end, safety: match.safety } : e;
+  }).filter((e) => e.action !== "remove" || (e.end - e.start > 0.05)); // remove cortes anulados
+
   step("compile");
-  const segments = compileTimeline(edl);
+  const segments = compileTimeline(edlSafe);
 
   // SmartZoom — derivado da análise já feita. Sem chamada LLM extra.
   const zoomEvents = computeZoomEvents({ semantic, segments, profile });
   console.log("[pipeline] zoomEvents:", zoomEvents.length, zoomEvents);
 
   // Integrity check + debug report (determinístico, zero LLM).
-  const integrity = checkEditingIntegrity({ segments, zoomEvents, duration });
+  // Passa `words` pra habilitar regra 0 (corte no meio de palavra).
+  const integrity = checkEditingIntegrity({ segments, zoomEvents, duration, words });
   const debugReport = buildDebugReport({ segments, zoomEvents, integrity, duration });
   if (integrity.summary.errors) {
     console.warn("[pipeline] integrity errors:", integrity.errors);

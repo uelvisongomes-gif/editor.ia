@@ -5,6 +5,7 @@
 // pra exibir na aba "Integridade" do painel de diagnóstico.
 //
 // Regras:
+//   0. Corte no meio de palavra (start ou end)         → ERROR (crítico)
 //   1. Zoom sobreposto a outro zoom  (>0.3s overlap)   → ERROR
 //   2. Zoom em segment deleted                          → ERROR
 //   3. Zoom com duração < 1.5s (pulso curto)           → WARN
@@ -24,16 +25,42 @@ const RULES = {
  * @param {Array} args.segments        - segments compilados (com deleted flag)
  * @param {Array} args.zoomEvents      - zoomEvents
  * @param {number} args.duration       - duração do vídeo
+ * @param {Array} [args.words]         - word timestamps (usado pela regra 0)
  * @param {object} [args.rules]        - override das constantes
  * @returns {{warnings:Array, errors:Array, infos:Array, summary:{errors:number,warnings:number,infos:number}}}
  */
-export function checkEditingIntegrity({ segments = [], zoomEvents = [], duration = 0, rules = {} } = {}) {
+export function checkEditingIntegrity({ segments = [], zoomEvents = [], duration = 0, words = [], rules = {} } = {}) {
   const R = { ...RULES, ...rules };
   const errors = [];
   const warnings = [];
   const infos = [];
 
   const zooms = [...zoomEvents].sort((a, b) => a.start - b.start);
+
+  // 0) Corte no meio de palavra — safety net crítico. Se algum corte tem
+  //    start/end DENTRO de uma palavra, é falha grave (deveria ter sido
+  //    ajustado pelo wordBoundarySafety antes de chegar aqui).
+  const MARGIN = 0.05;
+  const deletedSegs = segments.filter((s) => s.deleted);
+  for (const seg of deletedSegs) {
+    for (const w of words) {
+      // start do corte cai dentro de palavra?
+      if (seg.start > w.start + MARGIN && seg.start < w.end - MARGIN) {
+        errors.push({
+          code: "cut_mid_word",
+          message: `Corte começa no meio da palavra "${w.word}"`,
+          at: seg.start,
+        });
+      }
+      if (seg.end > w.start + MARGIN && seg.end < w.end - MARGIN) {
+        errors.push({
+          code: "cut_mid_word",
+          message: `Corte termina no meio da palavra "${w.word}"`,
+          at: seg.end,
+        });
+      }
+    }
+  }
 
   // 1) zoom overlap
   for (let i = 0; i < zooms.length; i++) {
