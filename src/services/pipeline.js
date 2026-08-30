@@ -23,6 +23,7 @@ import { buildDebugReport } from "./editingDebugReport.js";
 import { snapAllCutsToWordBoundaries } from "./wordBoundarySafety.js";
 import { cleanupCutEdges } from "./cutEdgeCleanup.js";
 import { buildVisualPlan } from "./visualDirector.js";
+import { buildVisualTimeline } from "./visualTimeline.js";
 
 const STEPS = {
   transcribe: "Transcrevendo o áudio...",
@@ -164,9 +165,16 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   }
   console.log("[pipeline] integrity summary:", integrity.summary);
 
+  // Visual timeline unificado — junta cortes + zooms + captions em uma lista
+  // cronológica única (Item 22). Usado por QC e UI.
+  const visualTimeline = buildVisualTimeline({
+    segments, zoomEvents, captionEvents: [], brollEvents: [], textOverlays: [],
+  });
+  console.log(`[pipeline] visualTimeline: ${visualTimeline.total} eventos (${JSON.stringify(visualTimeline.counts)})`);
+
   return {
     words, waveform, speechActivity, semantic, narrative, edl, segments, profile,
-    problemCandidates, zoomEvents, integrity, debugReport, visualPlan,
+    problemCandidates, zoomEvents, integrity, debugReport, visualPlan, visualTimeline,
   };
 }
 

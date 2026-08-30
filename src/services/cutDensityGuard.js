@@ -16,6 +16,10 @@ const DENSITY_PER_PROFILE = {
   leve: 6,
   equilibrada: 10,
   agressiva: 16,
+  profissional: 5,     // super clean
+  podcast: 4,          // quase nenhum corte visual
+  tiktokshop: 14,      // dinâmico
+  tutorial: 8,         // moderado
 };
 
 const WINDOW_SEC = 60;

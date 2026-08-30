@@ -308,7 +308,10 @@ export function computeZoomEvents({ semantic, segments, profile }) {
   // Guard 2 · Cap por minuto conforme perfil — evita edições poluídas
   // Densidade máxima permitida (zooms por minuto):
   //   leve/natural: 4 · equilibrada/dinâmico: 8 · agressiva/viral: 14
-  const MAX_ZOOMS_PER_MIN = { leve: 4, equilibrada: 8, agressiva: 14 };
+  const MAX_ZOOMS_PER_MIN = {
+    leve: 4, equilibrada: 8, agressiva: 14,
+    profissional: 3, podcast: 1, tiktokshop: 12, tutorial: 6,
+  };
   const maxPerMin = MAX_ZOOMS_PER_MIN[profile?.id] ?? 8;
   const activeDur = activeSegs.length ? (activeSegs[activeSegs.length - 1].end - activeSegs[0].start) : 60;
   const maxTotal = Math.max(1, Math.ceil((activeDur / 60) * maxPerMin));
