@@ -138,5 +138,51 @@ export function cleanupCutEdges(edl, words) {
 
   // Remove KEEPs anulados
   const filtered = sorted.filter((e) => !e._voidKeep);
-  return { edl: filtered, extensions };
+
+  // Segunda passada: TIGHTEN — estende bordas do REMOVE pro máximo espaço
+  // vazio disponível ao lado. Se a última palavra REAL antes do REMOVE
+  // termina em 14.00 e o REMOVE começa em 14.10 (com 100ms de silêncio
+  // entre eles), estende REMOVE.start pra 14.03 (30ms depois da palavra).
+  // Do outro lado: se REMOVE.end é 27.15 e próxima palavra começa em 27.30,
+  // estende REMOVE.end pra 27.27 (30ms antes da palavra).
+  //
+  // Isso engole hesitações inaudíveis ("haaaa" residual, sons de boca,
+  // respiração) que o Whisper não transcreveu mas que ainda vazam no
+  // seam do corte causando "chatice auditiva".
+  const TIGHTEN_MARGIN = 0.03;
+  let tightened = 0;
+  for (const cut of filtered) {
+    if (cut.action !== "remove" && cut.action !== "trim") continue;
+    const prevWord = wordEndingBefore(cut.start, words);
+    const nextWord = wordStartingAfter(cut.end, words);
+    // Encolhe pra trás: se há silêncio entre prevWord.end e cut.start, come.
+    if (prevWord && prevWord.end < cut.start - TIGHTEN_MARGIN) {
+      const oldStart = cut.start;
+      cut.start = prevWord.end + TIGHTEN_MARGIN;
+      cut._tightenedStart = { from: oldStart, to: cut.start };
+      tightened += 1;
+    }
+    // Estende pra frente: se há silêncio entre cut.end e nextWord.start, come.
+    if (nextWord && nextWord.start > cut.end + TIGHTEN_MARGIN) {
+      const oldEnd = cut.end;
+      cut.end = nextWord.start - TIGHTEN_MARGIN;
+      cut._tightenedEnd = { from: oldEnd, to: cut.end };
+      tightened += 1;
+    }
+  }
+  // Se REMOVE ficou colado num KEEP e KEEP começa antes, avança KEEP.start
+  // pra igualar o novo REMOVE.end. Evita overlap invertido.
+  const sortedByStart = [...filtered].sort((a, b) => a.start - b.start);
+  for (let i = 0; i < sortedByStart.length - 1; i++) {
+    const cur = sortedByStart[i];
+    const nxt = sortedByStart[i + 1];
+    if ((cur.action === "remove" || cur.action === "trim") &&
+        nxt.action === "keep" && nxt.start < cur.end) {
+      nxt.start = cur.end;
+      if (nxt.end <= nxt.start + 0.02) nxt._voidKeep = true;
+    }
+  }
+
+  const finalOut = filtered.filter((e) => !e._voidKeep);
+  return { edl: finalOut, extensions, tightened };
 }
