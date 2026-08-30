@@ -108,24 +108,30 @@ export function cleanupCutEdges(edl, words) {
     if (cur.action !== "remove" && cur.action !== "trim") continue;
     const decision = decideExtensionBackward(cur, words);
     if (!decision) continue;
+    // Safety margin: recua 30ms antes do início da palavra swallowada.
+    // Garante que nem 1 frame de áudio da palavra que deveria sumir
+    // vaze pro KEEP (fonema inicial da palavra tende a começar 20-50ms
+    // antes do "start" oficial que o Whisper reporta).
+    const SAFETY_MARGIN = 0.03;
+    const effectiveStart = Math.max(0, decision.newStart - SAFETY_MARGIN);
     // Estende o REMOVE pra trás
     const originalStart = cur.start;
-    cur.start = decision.newStart;
+    cur.start = effectiveStart;
     cur.edgeCleanup = {
       extendedFrom: originalStart,
       reason: decision.reason,
       swallowedWord: decision.swallowedWord,
+      safetyMargin: SAFETY_MARGIN,
     };
     extensions += 1;
     // Ajusta o KEEP anterior pra terminar no novo start (evita overlap)
     for (let j = i - 1; j >= 0; j--) {
       const prev = sorted[j];
-      if (prev.action === "keep" && prev.end > decision.newStart) {
-        prev.end = decision.newStart;
-        // Se o KEEP virou vazio ou inválido, marca pra remover
+      if (prev.action === "keep" && prev.end > effectiveStart) {
+        prev.end = effectiveStart;
         if (prev.end <= prev.start + 0.02) prev._voidKeep = true;
-      } else if (prev.end <= decision.newStart) {
-        break; // KEEP anterior não overlap
+      } else if (prev.end <= effectiveStart) {
+        break;
       }
     }
   }
