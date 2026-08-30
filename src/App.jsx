@@ -2416,29 +2416,21 @@ async function callMistakeDetectionAPI(words) {
 
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            {/* Logo CRIE Studios como SVG inline — fundo transparente */}
-            <svg viewBox="0 0 260 108" style={{ height: 54, width: "auto", display: "block" }} aria-label="CRIE Studios">
-              <defs>
-                <linearGradient id="crie-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#FF6A2B" />
-                  <stop offset="100%" stopColor="#FF3EA5" />
-                </linearGradient>
-              </defs>
-              {/* CRIE letters — bold sans-serif */}
-              <text x="0" y="60" style={{
-                fontFamily: "'Inter Tight','Inter',sans-serif",
-                fontWeight: 900, fontSize: 62, letterSpacing: "0.06em", fill: "#F5EFFF",
-              }}>CRIE</text>
-              {/* Play triangle inside the C */}
-              <polygon points="30,35 30,63 54,49" fill="url(#crie-grad)" />
-              {/* Gradient bar inside the E (middle stroke) */}
-              <rect x="200" y="44" width="48" height="10" fill="url(#crie-grad)" />
-              {/* STUDIOS below in gradient tracked caps */}
-              <text x="24" y="94" style={{
-                fontFamily: "'Inter Tight','Inter',sans-serif",
-                fontWeight: 700, fontSize: 14, letterSpacing: "0.42em", fill: "url(#crie-grad)",
-              }}>STUDIOS</text>
-            </svg>
+            {/* Logo CRIE Studios: img real com blend-mode screen (fundo preto
+                vira transparente sobre o dark). Fallback = texto simples se
+                o PNG não existir. */}
+            <img
+              src="/logo.png"
+              alt="CRIE Studios"
+              style={{ height: 56, width: "auto", display: "block" }}
+            />
+            <span style={{
+              display: "none",
+              fontFamily: "'Archivo Black', 'Inter Tight', sans-serif",
+              fontSize: 32, letterSpacing: "0.02em",
+              background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)",
+              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+            }}>CRIE STUDIOS</span>
             <div>
               <p style={{
                 fontFamily: "'Inter Tight',sans-serif",
