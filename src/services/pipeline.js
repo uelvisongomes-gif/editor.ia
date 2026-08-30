@@ -26,6 +26,9 @@ import { buildVisualPlan } from "./visualDirector.js";
 import { buildVisualTimeline } from "./visualTimeline.js";
 import { buildBrollPlan } from "./brollDirector.js";
 import { buildGraphicsPlan } from "./graphicsDirector.js";
+import { buildTransitionPlan } from "./transitionEngine.js";
+import { buildPatternInterrupts } from "./patternInterrupts.js";
+import { detectProductMoments } from "./productTracking.js";
 
 const STEPS = {
   transcribe: "Transcrevendo o áudio...",
@@ -175,6 +178,14 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   const graphicsPlan = buildGraphicsPlan({ words, narrative, segments, profile });
   console.log(`[pipeline] graphicsPlan: ${graphicsPlan.summary.emitted} overlays (${graphicsPlan.summary.big_numbers} números, ${graphicsPlan.summary.text_overlays} texto)`);
 
+  // Transition engine — qual transição usar em cada cut point
+  const transitionPlan = buildTransitionPlan({ segments, zoomEvents, narrative, profile });
+  console.log(`[pipeline] transitionPlan: ${transitionPlan.summary.total} transições (${JSON.stringify(transitionPlan.summary.byKind)})`);
+
+  // Product tracking (Item 6) — detecta momentos de menção/demonstração de produto
+  const productMoments = detectProductMoments({ words, segments });
+  console.log(`[pipeline] productMoments: ${productMoments.summary.total} (${productMoments.summary.mentions} menções, ${productMoments.summary.demonstrations} demos)`);
+
   // Visual timeline unificado — junta cortes + zooms + captions + broll + text
   const visualTimeline = buildVisualTimeline({
     segments, zoomEvents, captionEvents: [],
@@ -183,10 +194,14 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   });
   console.log(`[pipeline] visualTimeline: ${visualTimeline.total} eventos (${JSON.stringify(visualTimeline.counts)})`);
 
+  // Pattern interrupts — DEPOIS de visualTimeline (usa ele como input)
+  const patternInterrupts = buildPatternInterrupts({ narrative, visualTimeline, profile });
+  console.log(`[pipeline] patternInterrupts: ${patternInterrupts.summary.total} sugestões`);
+
   return {
     words, waveform, speechActivity, semantic, narrative, edl, segments, profile,
     problemCandidates, zoomEvents, integrity, debugReport, visualPlan, visualTimeline,
-    brollPlan, graphicsPlan,
+    brollPlan, graphicsPlan, transitionPlan, patternInterrupts, productMoments,
   };
 }
 
