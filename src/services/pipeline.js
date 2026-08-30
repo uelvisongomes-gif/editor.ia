@@ -255,7 +255,7 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   };
 
   return {
-    words, waveform, speechActivity, semantic, narrative, edl, segments, profile,
+    words, waveform, audioBuffer, speechActivity, semantic, narrative, edl, segments, profile,
     problemCandidates, zoomEvents, integrity, debugReport, visualPlan, visualTimeline,
     brollPlan, graphicsPlan, transitionPlan, patternInterrupts, productMoments,
     protectedRanges, audioPlan, audioReport,

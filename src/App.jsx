@@ -14,6 +14,8 @@ import { ProblemsFound } from "./components/ProblemsFound.jsx";
 import { IntegrityAndTimelineDebug } from "./components/IntegrityAndTimelineDebug.jsx";
 import { AIAnalysisPanel } from "./components/AIAnalysisPanel.jsx";
 import { MusicLibrary } from "./components/MusicLibrary.jsx";
+import { FinalQCModal } from "./components/FinalQCModal.jsx";
+import { runFinalQC } from "./services/finalQC/finalQCOrchestrator.js";
 import { getMusicById } from "./services/musicCatalog.js";
 import { AuthGate } from "./components/AuthGate.jsx";
 import { createHistory, pushState, undo as undoHistory, redo as redoHistory, canUndo, canRedo } from "./services/edlHistory.js";
@@ -974,6 +976,12 @@ export default function AiVideoEditor() {
   const [reprocessBusy, setReprocessBusy] = useState(false);
   // Fase 4 · Audio Director completo
   const [audioReport, setAudioReport] = useState(null);
+  // Fase 5 · Final QC
+  const [finalQCReport, setFinalQCReport] = useState(null);
+  const [finalQCIterations, setFinalQCIterations] = useState(0);
+  const [finalQCBusy, setFinalQCBusy] = useState(false);
+  const [showFinalQCModal, setShowFinalQCModal] = useState(false);
+  const [qcDebugMode, setQcDebugMode] = useState(false);
   // Seleção de zoom para edição (excluir/redimensionar/mover/nível).
   const [selectedZoomId, setSelectedZoomId] = useState(null);
   // Ref pra drag state
@@ -1631,7 +1639,7 @@ async function callMistakeDetectionAPI(words) {
           ? { words: cachedRef.current.words, waveform: cachedRef.current.waveform }
           : {},
       });
-      cachedRef.current = { videoUrl, words: result.words, waveform: result.waveform };
+      cachedRef.current = { videoUrl, words: result.words, waveform: result.waveform, audioBuffer: result.audioBuffer };
       setUsageLog(runLog);
       // Keep the visual waveform + word timestamps in sync with the manual tools
       // so pause/mistake panels still work after running the smart pipeline.
@@ -2405,8 +2413,7 @@ async function callMistakeDetectionAPI(words) {
     [platform]
   );
 
-  const handleExport = async () => {
-    if (!videoRef.current || !duration) return;
+  const doActualExport = async () => {
     setIsExporting(true);
     setExportProgress(0);
     setExportError("");
@@ -2431,6 +2438,50 @@ async function callMistakeDetectionAPI(words) {
       setExportError(err.message || "Falha ao exportar o vídeo.");
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!videoRef.current || !duration || finalQCBusy) return;
+    // Fase 5 · rodar Final QC antes de exportar
+    setFinalQCBusy(true);
+    try {
+      const { report, iterations } = await runFinalQC({
+        segments,
+        words: wordTimestamps,
+        audioBuffer: cachedRef.current?.audioBuffer || null,
+        waveform,
+        narrative: narrativeMap,
+        audioReport,
+        brollPlan,
+        graphicsPlan,
+        transitionPlan: null,
+        patternInterrupts,
+        productMoments,
+        zoomEvents,
+        captions: clippedCaptions,
+        captionPosition,
+        profile: EDITING_PROFILES.find((p) => p.id === intensityId),
+        duration,
+        platformId: platform?.id || "tiktok",
+        faceRegions: null,
+        videoEl: videoRef.current,
+        resolution,
+        llmEnabled: true,
+      }, { autoFix: true });
+      setFinalQCReport(report);
+      setFinalQCIterations(iterations);
+      if (report.status === "PASS") {
+        // Exporta direto sem modal
+        await doActualExport();
+      } else {
+        setShowFinalQCModal(true);
+      }
+    } catch (err) {
+      console.error("[finalQC] falhou, exportando sem QC:", err);
+      await doActualExport();
+    } finally {
+      setFinalQCBusy(false);
     }
   };
 
@@ -4090,6 +4141,17 @@ async function callMistakeDetectionAPI(words) {
       )}
       {/* Áudio da música de fundo — sincronizado com play/pause do vídeo */}
       <audio ref={musicAudioRef} className="hidden" />
+      {/* Fase 5 · Final QC Modal (só abre em REVIEW/FAIL) */}
+      {showFinalQCModal && finalQCReport && (
+        <FinalQCModal
+          report={finalQCReport}
+          iterations={finalQCIterations}
+          debugMode={qcDebugMode}
+          onExport={() => { setShowFinalQCModal(false); doActualExport(); }}
+          onCancel={() => setShowFinalQCModal(false)}
+          onReview={() => { setShowFinalQCModal(false); setActiveTool("smart"); }}
+        />
+      )}
     </div>
   );
 }
