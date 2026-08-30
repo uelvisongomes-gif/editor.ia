@@ -249,40 +249,81 @@ export function computeZoomEvents({ semantic, segments, profile }) {
 
   events.sort((a, b) => a.start - b.start);
 
-  // Anti-pulso: se dois zooms consecutivos têm gap < MIN_REST_BETWEEN,
-  // funde-os OU descarta o de menor prioridade. cut_transition (conf 1.0)
-  // vence semantic. Se ambos são cut_transition, funde num único zoom
-  // contínuo (evita "sobe-desce-sobe-desce").
-  const merged = [];
+  // Guard 1 · Max 1 zoom por sentence — impede zoom seguido no meio
+  // da mesma unidade de fala (mesmo se veio de cut+gap).
+  const zoomsBySentence = new Map();
+  const dedupBySentence = [];
   for (const ev of events) {
+    const idx = ev.sentenceIndex;
+    if (idx == null || idx === undefined) {
+      dedupBySentence.push(ev);
+      continue;
+    }
+    const existing = zoomsBySentence.get(idx);
+    if (!existing) {
+      zoomsBySentence.set(idx, ev);
+      dedupBySentence.push(ev);
+      continue;
+    }
+    // Já tem zoom nessa sentence — mantém o de maior prioridade
+    // (cut_transition ou strong level ganham).
+    const prevScore = (existing.isTransition ? 1 : 0) + { light: 0, medium: 1, strong: 2 }[existing.level || "light"];
+    const curScore = (ev.isTransition ? 1 : 0) + { light: 0, medium: 1, strong: 2 }[ev.level || "light"];
+    if (curScore > prevScore) {
+      // Troca — remove o anterior do array
+      const removeIdx = dedupBySentence.indexOf(existing);
+      if (removeIdx >= 0) dedupBySentence.splice(removeIdx, 1);
+      zoomsBySentence.set(idx, ev);
+      dedupBySentence.push(ev);
+    }
+    // else: descarta o novo silenciosamente
+  }
+
+  // Anti-pulso: se dois zooms consecutivos têm gap < MIN_REST_BETWEEN,
+  // funde-os OU descarta o de menor prioridade.
+  const merged = [];
+  for (const ev of dedupBySentence.sort((a, b) => a.start - b.start)) {
     const prev = merged[merged.length - 1];
     if (!prev) { merged.push(ev); continue; }
     const rest = ev.start - prev.end;
     if (rest >= MIN_REST_BETWEEN_ZOOMS_SEC) { merged.push(ev); continue; }
 
-    // Muito próximos: decidir.
     const prevIsCut = prev.isTransition === true;
     const curIsCut = ev.isTransition === true;
     if (prevIsCut && curIsCut) {
-      // Merge — vira zoom contínuo do primeiro cut até o fim do segundo
       prev.end = Math.max(prev.end, ev.end);
       prev.reason = "cut_transition_merged";
       prev.text = ev.text || prev.text;
     } else if (prev.confidence >= ev.confidence) {
-      // Mantém o anterior, descarta o novo.
+      // mantém anterior
     } else {
-      // O novo tem mais confiança — substitui o anterior, MAS mantém
-      // o gap de descanso: ajusta start se necessário.
       const desiredStart = prev.end + MIN_REST_BETWEEN_ZOOMS_SEC;
       if (desiredStart < ev.end - 1.5) {
         ev.start = desiredStart;
         merged.push(ev);
       }
-      // Se não sobra tempo pro zoom novo, desiste (previne pulsar).
     }
   }
 
-  return merged;
+  // Guard 2 · Cap por minuto conforme perfil — evita edições poluídas
+  // Densidade máxima permitida (zooms por minuto):
+  //   leve/natural: 4 · equilibrada/dinâmico: 8 · agressiva/viral: 14
+  const MAX_ZOOMS_PER_MIN = { leve: 4, equilibrada: 8, agressiva: 14 };
+  const maxPerMin = MAX_ZOOMS_PER_MIN[profile?.id] ?? 8;
+  const activeDur = activeSegs.length ? (activeSegs[activeSegs.length - 1].end - activeSegs[0].start) : 60;
+  const maxTotal = Math.max(1, Math.ceil((activeDur / 60) * maxPerMin));
+  let capped = merged;
+  if (merged.length > maxTotal) {
+    // Ordena por prioridade (isTransition=1 + level rank) DESC, pega top N,
+    // depois reordena cronologicamente.
+    const priorityRank = (e) => (e.isTransition ? 1 : 0) + { light: 0, medium: 1, strong: 2 }[e.level || "light"];
+    capped = [...merged]
+      .sort((a, b) => priorityRank(b) - priorityRank(a))
+      .slice(0, maxTotal)
+      .sort((a, b) => a.start - b.start);
+  }
+
+  return capped;
 }
 
 /**
