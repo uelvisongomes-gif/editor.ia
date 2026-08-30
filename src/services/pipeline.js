@@ -30,6 +30,10 @@ import { buildTransitionPlan } from "./transitionEngine.js";
 import { buildPatternInterrupts } from "./patternInterrupts.js";
 import { detectProductMoments } from "./productTracking.js";
 import { buildProtectedRanges } from "./contextualProtections.js";
+import { estimateLoudness } from "./audio/loudnessAnalyzer.js";
+import { shouldApplyNoiseReduction } from "./audio/noiseReduction.js";
+import { computeDuckingEnvelope } from "./audio/musicDucking.js";
+import { computeQualityScore } from "./qualityScoring.js";
 
 const STEPS = {
   transcribe: "Transcrevendo o áudio...",
@@ -203,11 +207,33 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   const protectedRanges = buildProtectedRanges({ narrative, productMoments, brollPlan });
   console.log(`[pipeline] protectedRanges: ${protectedRanges.summary.total} (${JSON.stringify(protectedRanges.summary.byKind)})`);
 
+  // Fase 4 · Audio analysis (não modifica áudio — só emite recomendações
+  // que o exportador consome quando implementar mix final)
+  const audioLoudness = estimateLoudness(waveform);
+  const needsNoiseReduction = shouldApplyNoiseReduction(waveform);
+  const duckingEnvelope = computeDuckingEnvelope({ speechActivity, duration });
+  const audioPlan = {
+    loudness: audioLoudness,
+    needsNoiseReduction,
+    duckingEnvelope,
+    summary: {
+      rmsDb: Math.round(audioLoudness.rmsDb),
+      recommendedGainDb: Math.round(audioLoudness.gainDb * 10) / 10,
+      noiseReduction: needsNoiseReduction,
+      duckingPoints: duckingEnvelope.length,
+    },
+  };
+  console.log(`[pipeline] audioPlan: RMS ${audioPlan.summary.rmsDb}dB, gain ${audioPlan.summary.recommendedGainDb > 0 ? "+" : ""}${audioPlan.summary.recommendedGainDb}dB, noise reduction ${needsNoiseReduction}`);
+
   return {
     words, waveform, speechActivity, semantic, narrative, edl, segments, profile,
     problemCandidates, zoomEvents, integrity, debugReport, visualPlan, visualTimeline,
     brollPlan, graphicsPlan, transitionPlan, patternInterrupts, productMoments,
-    protectedRanges,
+    protectedRanges, audioPlan,
+    qualityScore: computeQualityScore({
+      integrity, segments, problemCandidates, zoomEvents, captions: [],
+      visualTimeline, profile, duration,
+    }),
   };
 }
 

@@ -12,6 +12,7 @@ import { EDITING_PROFILES, DEFAULT_PROFILE_ID } from "./services/editingProfiles
 import { EdlReview } from "./components/EdlReview.jsx";
 import { ProblemsFound } from "./components/ProblemsFound.jsx";
 import { IntegrityAndTimelineDebug } from "./components/IntegrityAndTimelineDebug.jsx";
+import { AIAnalysisPanel } from "./components/AIAnalysisPanel.jsx";
 import { MusicLibrary } from "./components/MusicLibrary.jsx";
 import { getMusicById } from "./services/musicCatalog.js";
 import { AuthGate } from "./components/AuthGate.jsx";
@@ -960,6 +961,14 @@ export default function AiVideoEditor() {
   // Integrity check + debug report — expostos pelo pipeline.
   const [integrityReport, setIntegrityReport] = useState(null);
   const [debugTimelineReport, setDebugTimelineReport] = useState(null);
+  // Fase 3 · artefatos completos da análise da IA
+  const [narrativeMap, setNarrativeMap] = useState(null);
+  const [visualPlan, setVisualPlan] = useState(null);
+  const [brollPlan, setBrollPlan] = useState(null);
+  const [graphicsPlan, setGraphicsPlan] = useState(null);
+  const [productMoments, setProductMoments] = useState(null);
+  const [protectedRanges, setProtectedRanges] = useState(null);
+  const [patternInterrupts, setPatternInterrupts] = useState(null);
   // Seleção de zoom para edição (excluir/redimensionar/mover/nível).
   const [selectedZoomId, setSelectedZoomId] = useState(null);
   // Ref pra drag state
@@ -1628,6 +1637,13 @@ async function callMistakeDetectionAPI(words) {
       setZoomEvents(result.zoomEvents || []);
       setIntegrityReport(result.integrity || null);
       setDebugTimelineReport(result.debugReport || null);
+      setNarrativeMap(result.narrative || null);
+      setVisualPlan(result.visualPlan || null);
+      setBrollPlan(result.brollPlan || null);
+      setGraphicsPlan(result.graphicsPlan || null);
+      setProductMoments(result.productMoments || null);
+      setProtectedRanges(result.protectedRanges || null);
+      setPatternInterrupts(result.patternInterrupts || null);
       setNarrativeTopic(result.semantic.topic || "");
       // Auto-color: aplica SEMPRE após analise, boost "social ready"
       // (Reels/TikTok). Referência do usuário: "levemente mais claro,
@@ -3882,6 +3898,15 @@ async function callMistakeDetectionAPI(words) {
                   <IntegrityAndTimelineDebug
                     integrity={integrityReport}
                     debugReport={debugTimelineReport}
+                  />
+                  <AIAnalysisPanel
+                    narrative={narrativeMap}
+                    brollPlan={brollPlan}
+                    graphicsPlan={graphicsPlan}
+                    productMoments={productMoments}
+                    protectedRanges={protectedRanges}
+                    patternInterrupts={patternInterrupts}
+                    visualPlan={visualPlan}
                   />
                 </Panel>
               )}
