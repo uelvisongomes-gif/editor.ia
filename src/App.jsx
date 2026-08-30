@@ -973,6 +973,18 @@ export default function AiVideoEditor() {
   const [captionStylePreset, setCaptionStylePreset] = useState("classico");
   const [captionPosition, setCaptionPosition] = useState("bottom");
   const [captionStyleGridOpen, setCaptionStyleGridOpen] = useState(true);
+  const captionGridRef = useRef(null);
+  // Fecha automaticamente ao clicar fora do grid de estilos.
+  useEffect(() => {
+    if (!captionStyleGridOpen) return;
+    const onDocClick = (e) => {
+      if (!captionGridRef.current) return;
+      if (captionGridRef.current.contains(e.target)) return;
+      setCaptionStyleGridOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [captionStyleGridOpen]);
   // Debug panel só aparece com ?debug=1 na URL.
   const debugMode = typeof window !== "undefined" && window.location.search.includes("debug=1");
   // --- Diagnóstico forense ---
@@ -2617,13 +2629,15 @@ async function callMistakeDetectionAPI(words) {
                         <p style={{ color: "#6B6B75" }} className="text-[10px] font-bold uppercase tracking-wide">
                           {captionStyleGridOpen ? `Estilo da legenda (${CAPTION_STYLES.length})` : "Estilo selecionado"}
                         </p>
-                        <button
-                          onClick={() => setCaptionStyleGridOpen((v) => !v)}
-                          style={{ color: "#FF6A2B", background: "transparent" }}
-                          className="text-[10px] font-semibold hover:underline"
-                        >
-                          {captionStyleGridOpen ? "Fechar" : "Trocar estilo"}
-                        </button>
+                        {!captionStyleGridOpen && (
+                          <button
+                            onClick={() => setCaptionStyleGridOpen(true)}
+                            style={{ color: "#FF6A2B", background: "transparent" }}
+                            className="text-[10px] font-semibold hover:underline"
+                          >
+                            Trocar estilo
+                          </button>
+                        )}
                       </div>
                       {!captionStyleGridOpen && (
                         <button
@@ -2652,7 +2666,7 @@ async function callMistakeDetectionAPI(words) {
                         </button>
                       )}
                       {captionStyleGridOpen && (
-                      <div className="grid grid-cols-2 gap-2 mb-2 max-h-[520px] overflow-y-auto pr-1">
+                      <div ref={captionGridRef} className="grid grid-cols-2 gap-2 mb-2 max-h-[520px] overflow-y-auto pr-1">
                         {CAPTION_STYLES.map((s) => {
                           const active = captionStylePreset === s.id;
                           // Palavra de destaque no mock — "MOTION"/"LIFE" viram
