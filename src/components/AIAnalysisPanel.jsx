@@ -44,7 +44,7 @@ function Section({ title, count, children, defaultOpen = false }) {
   );
 }
 
-export function AIAnalysisPanel({ narrative, brollPlan, graphicsPlan, productMoments, protectedRanges, patternInterrupts, visualPlan }) {
+export function AIAnalysisPanel({ narrative, brollPlan, graphicsPlan, productMoments, protectedRanges, patternInterrupts, visualPlan, audioReport }) {
   if (!narrative) return null;
   const hook = narrative.timeline?.find((s) => s.role === "hook");
   const cta = narrative.timeline?.filter((s) => s.role === "cta") || [];
@@ -54,6 +54,13 @@ export function AIAnalysisPanel({ narrative, brollPlan, graphicsPlan, productMom
   const overlays = graphicsPlan?.overlays || [];
   const products = productMoments?.moments || [];
   const patterns = patternInterrupts?.interrupts || [];
+  const audioDiag = audioReport?.diagnostic;
+  const audioQ = audioReport?.audioQuality;
+  const musicDec = audioReport?.musicDecision;
+  const musicBrief = audioReport?.musicBrief;
+  const musicTrack = audioReport?.musicMatch?.track;
+  const sfxCount = audioReport?.sfxPlan?.total || 0;
+  const audioDecTotal = audioReport?.summary?.totalDecisions || 0;
 
   return (
     <div style={{ background: "#12081C", border: "1px solid #2A1A3E" }} className="rounded-lg p-3 mt-2">
@@ -146,6 +153,57 @@ export function AIAnalysisPanel({ narrative, brollPlan, graphicsPlan, productMom
           </div>
         ))}
       </Section>
+
+      {/* Áudio · diagnóstico */}
+      {audioDiag && (
+        <div style={{ background: "linear-gradient(92deg, rgba(93,202,165,0.10), rgba(120,186,255,0.08))", border: "1px solid #5DCAA5" }} className="rounded p-2 mt-2 mb-2">
+          <div className="flex items-center justify-between mb-1">
+            <p style={{ color: "#5DCAA5" }} className="text-[10px] font-bold uppercase">Diagnóstico de áudio</p>
+            <span style={{ color: "#5DCAA5" }} className="text-xs font-black">{audioQ?.score ?? audioDiag.overallQuality}/100</span>
+          </div>
+          <div className="grid grid-cols-3 gap-1 text-[10px] mb-1" style={{ color: "#A090B8" }}>
+            <div>LUFS: <b style={{ color: "#F5EFFF" }}>{audioDiag.loudness.estimatedLufs}</b></div>
+            <div>Peak: <b style={{ color: "#F5EFFF" }}>{audioDiag.loudness.peakDb} dB</b></div>
+            <div>Floor: <b style={{ color: "#F5EFFF" }}>{audioDiag.noise.floorDb} dB</b></div>
+          </div>
+          {audioDiag.problems.length > 0 && (
+            <ul className="text-[10px] mt-1" style={{ color: "#FFB020" }}>
+              {audioDiag.problems.slice(0, 5).map((p, i) => (
+                <li key={i}>· {p}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Música · decisão */}
+      {musicDec && (
+        <div style={{ background: "#12081C", border: "1px solid #2A1A3E" }} className="rounded p-2 mb-2">
+          <p style={{ color: "#FF3EA5" }} className="text-[10px] font-bold uppercase mb-1">
+            Música · {musicDec.answer === "yes" ? "SIM" : musicDec.answer === "no" ? "NÃO" : "OPCIONAL"}
+          </p>
+          <div className="text-[10px] mb-1" style={{ color: "#A090B8" }}>
+            {musicDec.reasons.join(" · ")}
+          </div>
+          {musicBrief && (
+            <div className="text-[10px] mt-1" style={{ color: "#F5EFFF" }}>
+              <b>{musicBrief.style}</b> @ {musicBrief.bpm} BPM · {musicBrief.mood} · {musicBrief.energy}
+            </div>
+          )}
+          {musicTrack && (
+            <div className="text-[10px] mt-1" style={{ color: "#5DCAA5" }}>
+              ✓ Match: <b>{musicTrack.title || musicTrack.name}</b> {musicTrack.score ? `(${Math.round(musicTrack.score * 100)}%)` : ""}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sound design + resumo timeline */}
+      {audioDecTotal > 0 && (
+        <div className="text-[10px] mt-1" style={{ color: "#7060A0" }}>
+          Audio timeline: {audioDecTotal} decisões · SFX: {sfxCount}
+        </div>
+      )}
     </div>
   );
 }

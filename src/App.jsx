@@ -972,6 +972,8 @@ export default function AiVideoEditor() {
   // Fase 5 · QC score dimensional
   const [dimensionalQuality, setDimensionalQuality] = useState(null);
   const [reprocessBusy, setReprocessBusy] = useState(false);
+  // Fase 4 · Audio Director completo
+  const [audioReport, setAudioReport] = useState(null);
   // Seleção de zoom para edição (excluir/redimensionar/mover/nível).
   const [selectedZoomId, setSelectedZoomId] = useState(null);
   // Ref pra drag state
@@ -1649,6 +1651,7 @@ async function callMistakeDetectionAPI(words) {
       setProtectedRanges(result.protectedRanges || null);
       setPatternInterrupts(result.patternInterrupts || null);
       setDimensionalQuality(result.qualityScore || null);
+      setAudioReport(result.audioReport || null);
       setNarrativeTopic(result.semantic.topic || "");
       // Auto-color: aplica SEMPRE após analise, boost "social ready"
       // (Reels/TikTok). Referência do usuário: "levemente mais claro,
@@ -3979,6 +3982,7 @@ async function callMistakeDetectionAPI(words) {
                     protectedRanges={protectedRanges}
                     patternInterrupts={patternInterrupts}
                     visualPlan={visualPlan}
+                    audioReport={audioReport}
                   />
                   {dimensionalQuality && (
                     <div style={{ background: "#1A0F28", border: "1px solid #2A1F38" }} className="mt-3 rounded-lg p-3">

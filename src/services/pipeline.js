@@ -34,6 +34,7 @@ import { buildProtectedRanges } from "./contextualProtections.js";
 import { estimateLoudness } from "./audio/loudnessAnalyzer.js";
 import { shouldApplyNoiseReduction } from "./audio/noiseReduction.js";
 import { computeDuckingEnvelope } from "./audio/musicDucking.js";
+import { runAudioDirector } from "./audio/audioDirector.js";
 import { computeQualityScore } from "./qualityScoring.js";
 
 const STEPS = {
@@ -80,10 +81,13 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
     words.map((w) => `[${w.start.toFixed(2)}]${w.word}`).join(" "));
 
   let waveform = reuse.waveform;
+  let audioBuffer = reuse.audioBuffer || null;
   if (!waveform) {
     throwIfAborted(signal);
     step("waveform");
-    waveform = await analyzeWaveform(videoUrl, duration);
+    const result = await analyzeWaveform(videoUrl, duration, { returnAudioBuffer: true });
+    waveform = result.waveform;
+    audioBuffer = result.audioBuffer;
   }
 
   // Camada VAD deterministica: combina words + waveform em uma
@@ -226,29 +230,35 @@ export async function runEditingPipeline({ videoUrl, duration, profileId, onStep
   const protectedRanges = buildProtectedRanges({ narrative, productMoments, brollPlan });
   console.log(`[pipeline] protectedRanges: ${protectedRanges.summary.total} (${JSON.stringify(protectedRanges.summary.byKind)})`);
 
-  // Fase 4 · Audio analysis (não modifica áudio — só emite recomendações
-  // que o exportador consome quando implementar mix final)
+  // Fase 4 · AUDIO DIRECTOR — orquestra 30+ decisões de áudio/música/SFX
+  onStep?.("audio_director", "Analisando áudio e planejando música...");
+  const audioReport = await runAudioDirector({
+    audioBuffer, waveform, speechActivity, words, segments,
+    narrative, topic: semantic?.topic || "", profile, duration,
+    brollPlan, transitionPlan, graphicsPlan, patternInterrupts,
+    platformId: "instagram",
+  });
+  console.log(`[pipeline] audioDirector: ${audioReport.summary.totalDecisions} decisões · diagnóstico ${audioReport.summary.diagnosticScore}/100 · música ${audioReport.summary.musicDecision}${audioReport.summary.musicMatched ? " (matched)" : ""}`);
+
+  // Compat com API antiga do audioPlan (App.jsx pode ainda consumir)
   const audioLoudness = estimateLoudness(waveform);
-  const needsNoiseReduction = shouldApplyNoiseReduction(waveform);
-  const duckingEnvelope = computeDuckingEnvelope({ speechActivity, duration });
   const audioPlan = {
     loudness: audioLoudness,
-    needsNoiseReduction,
-    duckingEnvelope,
+    needsNoiseReduction: shouldApplyNoiseReduction(waveform),
+    duckingEnvelope: audioReport.musicEnvelope,
     summary: {
       rmsDb: Math.round(audioLoudness.rmsDb),
       recommendedGainDb: Math.round(audioLoudness.gainDb * 10) / 10,
-      noiseReduction: needsNoiseReduction,
-      duckingPoints: duckingEnvelope.length,
+      noiseReduction: shouldApplyNoiseReduction(waveform),
+      duckingPoints: audioReport.musicEnvelope.length,
     },
   };
-  console.log(`[pipeline] audioPlan: RMS ${audioPlan.summary.rmsDb}dB, gain ${audioPlan.summary.recommendedGainDb > 0 ? "+" : ""}${audioPlan.summary.recommendedGainDb}dB, noise reduction ${needsNoiseReduction}`);
 
   return {
     words, waveform, speechActivity, semantic, narrative, edl, segments, profile,
     problemCandidates, zoomEvents, integrity, debugReport, visualPlan, visualTimeline,
     brollPlan, graphicsPlan, transitionPlan, patternInterrupts, productMoments,
-    protectedRanges, audioPlan,
+    protectedRanges, audioPlan, audioReport,
     qualityScore: computeQualityScore({
       integrity, segments, problemCandidates, zoomEvents, captions: [],
       visualTimeline, profile, duration,

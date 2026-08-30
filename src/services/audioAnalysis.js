@@ -2,7 +2,7 @@
 // waveform. Used both for the UI's visual waveform and as the raw signal
 // for silence detection.
 
-export async function analyzeWaveform(videoUrl, duration) {
+export async function analyzeWaveform(videoUrl, duration, { returnAudioBuffer = false } = {}) {
   const resp = await fetch(videoUrl);
   const arrayBuf = await resp.arrayBuffer();
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -25,6 +25,7 @@ export async function analyzeWaveform(videoUrl, duration) {
       }
       buckets.push({ start: b * bucketDur, end: (b + 1) * bucketDur, level: peak });
     }
+    if (returnAudioBuffer) return { waveform: buckets, audioBuffer };
     return buckets;
   } finally {
     ctx.close();
