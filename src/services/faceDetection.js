@@ -63,12 +63,17 @@ export function estimateFaceFromAspect(sourceWidth, sourceHeight) {
  * @param {string} [args.provider="heuristic"]  - "heuristic" | "mediapipe" | "faceapi"
  * @returns {Promise<{ regions: FaceRegion[], provider: string }>}
  */
-export async function detectFaceRegions({ duration, sourceWidth, sourceHeight, samplingSec = 1.0, provider = "heuristic" } = {}) {
-  if (provider !== "heuristic") {
-    console.warn(`[faceDetection] provider "${provider}" ainda não implementado — usando heurística.`);
-  }
+export async function detectFaceRegions({ duration, sourceWidth, sourceHeight, samplingSec = 1.0, provider = "heuristic", videoEl } = {}) {
   if (!Number.isFinite(duration) || duration <= 0 || !sourceWidth || !sourceHeight) {
     return { regions: [], provider: "heuristic" };
+  }
+  if (provider === "mediapipe" && videoEl) {
+    try {
+      const result = await detectViaMediaPipe({ videoEl, duration, sourceWidth, sourceHeight, samplingSec });
+      if (result?.regions?.length) return result;
+    } catch (err) {
+      console.warn("[faceDetection] MediaPipe falhou, caindo pra heurística:", err.message);
+    }
   }
   const bbox = estimateFaceFromAspect(sourceWidth, sourceHeight);
   const regions = [];
@@ -76,6 +81,58 @@ export async function detectFaceRegions({ duration, sourceWidth, sourceHeight, s
     regions.push({ t, faces: [bbox] });
   }
   return { regions, provider: "heuristic" };
+}
+
+let _mediaPipeDetector = null;
+async function ensureMediaPipe() {
+  if (_mediaPipeDetector) return _mediaPipeDetector;
+  // Carrega via CDN — evita bundle bloat
+  const vision = await import(/* @vite-ignore */ "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/vision_bundle.mjs");
+  const fileset = await vision.FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/wasm"
+  );
+  _mediaPipeDetector = await vision.FaceDetector.createFromOptions(fileset, {
+    baseOptions: {
+      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
+      delegate: "GPU",
+    },
+    runningMode: "VIDEO",
+    minDetectionConfidence: 0.5,
+  });
+  return _mediaPipeDetector;
+}
+
+async function detectViaMediaPipe({ videoEl, duration, sourceWidth, sourceHeight, samplingSec }) {
+  const detector = await ensureMediaPipe();
+  const regions = [];
+  const originalTime = videoEl.currentTime;
+  const originalPaused = videoEl.paused;
+  if (!originalPaused) videoEl.pause();
+  for (let t = 0; t < duration; t += samplingSec) {
+    await seekTo(videoEl, t);
+    const res = detector.detectForVideo(videoEl, performance.now());
+    const faces = (res?.detections || []).map((d) => {
+      const bb = d.boundingBox;
+      return {
+        x: (bb.originX + bb.width / 2) / sourceWidth,
+        y: (bb.originY + bb.height / 2) / sourceHeight,
+        w: bb.width / sourceWidth,
+        h: bb.height / sourceHeight,
+        confidence: d.categories?.[0]?.score || 0.7,
+      };
+    });
+    regions.push({ t, faces });
+  }
+  videoEl.currentTime = originalTime;
+  return { regions, provider: "mediapipe" };
+}
+
+function seekTo(videoEl, t) {
+  return new Promise((resolve) => {
+    const onSeeked = () => { videoEl.removeEventListener("seeked", onSeeked); resolve(); };
+    videoEl.addEventListener("seeked", onSeeked);
+    videoEl.currentTime = t;
+  });
 }
 
 /**

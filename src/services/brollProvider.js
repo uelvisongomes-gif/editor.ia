@@ -56,14 +56,27 @@ export async function searchBrollMedia(query, opts = {}) {
   switch (provider) {
     case "pexels":
     case "pixabay":
-      // Estes providers precisam de proxy backend com API key.
-      // Fica pra próxima etapa quando integração real for feita.
-      console.warn(`[brollProvider] "${provider}" não implementado — usando stub.`);
-      return searchStub(query, limit);
+      return searchViaProxy(query, provider, limit, opts.type || "video");
     case "user_upload":
-      // Retorna do storage local do usuário (futuro).
       return [];
     default:
       return searchStub(query, limit);
+  }
+}
+
+async function searchViaProxy(query, provider, limit, type) {
+  try {
+    const url = `/api/broll-search?q=${encodeURIComponent(query)}&provider=${provider}&limit=${limit}&type=${type}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`${provider} ${r.status}`);
+    const data = await r.json();
+    if (!data.media?.length && data.error === "no_key") {
+      console.warn(`[brollProvider] ${provider} sem API key — usando stub.`);
+      return searchStub(query, limit);
+    }
+    return data.media || [];
+  } catch (err) {
+    console.warn(`[brollProvider] proxy falhou (${err.message}) — usando stub.`);
+    return searchStub(query, limit);
   }
 }

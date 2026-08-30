@@ -969,6 +969,9 @@ export default function AiVideoEditor() {
   const [productMoments, setProductMoments] = useState(null);
   const [protectedRanges, setProtectedRanges] = useState(null);
   const [patternInterrupts, setPatternInterrupts] = useState(null);
+  // Fase 5 · QC score dimensional
+  const [dimensionalQuality, setDimensionalQuality] = useState(null);
+  const [reprocessBusy, setReprocessBusy] = useState(false);
   // Seleção de zoom para edição (excluir/redimensionar/mover/nível).
   const [selectedZoomId, setSelectedZoomId] = useState(null);
   // Ref pra drag state
@@ -1113,6 +1116,7 @@ export default function AiVideoEditor() {
     setEdl([]);
     setProblemCandidates([]);
     setZoomEvents([]);
+    setDimensionalQuality(null);
     setNarrativeTopic("");
     setSmartDone(false);
     setSmartError("");
@@ -1644,6 +1648,7 @@ async function callMistakeDetectionAPI(words) {
       setProductMoments(result.productMoments || null);
       setProtectedRanges(result.protectedRanges || null);
       setPatternInterrupts(result.patternInterrupts || null);
+      setDimensionalQuality(result.qualityScore || null);
       setNarrativeTopic(result.semantic.topic || "");
       // Auto-color: aplica SEMPRE após analise, boost "social ready"
       // (Reels/TikTok). Referência do usuário: "levemente mais claro,
@@ -3964,6 +3969,37 @@ async function callMistakeDetectionAPI(words) {
                     patternInterrupts={patternInterrupts}
                     visualPlan={visualPlan}
                   />
+                  {dimensionalQuality && (
+                    <div style={{ background: "#1A0F28", border: "1px solid #2A1F38" }} className="mt-3 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs font-semibold" style={{ color: "#F5F5F7" }}>Score de qualidade</div>
+                        <div className="text-lg font-black" style={{
+                          background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)",
+                          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                          fontFamily: "'Archivo Black',sans-serif",
+                        }}>{dimensionalQuality.final}</div>
+                      </div>
+                      <div className="text-[10px] uppercase tracking-wide mb-2" style={{ color: "#FF6A2B" }}>{dimensionalQuality.label}</div>
+                      <div className="grid grid-cols-2 gap-1 text-[10px]" style={{ color: "#A89EB4" }}>
+                        <div>Fala: <b style={{ color: "#F5F5F7" }}>{dimensionalQuality.speech_cleanup}</b></div>
+                        <div>Cortes: <b style={{ color: "#F5F5F7" }}>{dimensionalQuality.cut_quality}</b></div>
+                        <div>Junções: <b style={{ color: "#F5F5F7" }}>{dimensionalQuality.join_quality}</b></div>
+                        <div>Legendas: <b style={{ color: "#F5F5F7" }}>{dimensionalQuality.caption_quality}</b></div>
+                        <div>Ritmo: <b style={{ color: "#F5F5F7" }}>{dimensionalQuality.visual_rhythm}</b></div>
+                        <div>Sem excesso: <b style={{ color: "#F5F5F7" }}>{dimensionalQuality.overediting_penalty}</b></div>
+                      </div>
+                      {dimensionalQuality.final < 75 && (
+                        <button
+                          onClick={runIntelligentEdit}
+                          disabled={reprocessBusy || smartBusy}
+                          style={{ background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)", color: "#1A0A02" }}
+                          className="mt-3 w-full py-1.5 rounded-md text-[11px] font-bold disabled:opacity-60"
+                        >
+                          {reprocessBusy ? "Reprocessando..." : "Reprocessar aplicando QC"}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </Panel>
               )}
               <Panel title="Exportação">
