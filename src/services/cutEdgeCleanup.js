@@ -1,28 +1,36 @@
 // Cut Edge Cleanup — corrige repetições que sobram nas bordas de cortes.
 //
-// Padrão detectado: quando um corte remove um trecho e a palavra
-// IMEDIATAMENTE antes do corte é igual à palavra IMEDIATAMENTE depois,
-// o listener escuta a mesma palavra 2x seguidas no seam do jump cut.
-//
-// Ex do usuário:
+// Padrão A (repetição no seam):
 //   "...porque FALTA [ideia stretched cortada] FALTA jeito..."
 //     ↑ falta antes                            ↑ falta depois
-// Resultado auditivo: "porque falta falta jeito" — som duplicado.
+//   Auditivo: "porque falta falta jeito" — soa duplicado.
+//   Fix: estende REMOVE pra trás pra swallowar a "falta" antes,
+//   E encolhe o KEEP anterior pro novo start (evita overlap).
 //
-// Fix: estender o corte pra trás pra engolir a "falta" pré-corte.
-// Deixa só uma ocorrência da palavra.
-//
-// Aplica-se APENAS a REMOVE (não REVIEW nem KEEP). Roda depois do
-// wordBoundarySafety pra ter certeza que as bordas já estão em word
-// boundaries seguras.
+// Padrão B (frase abandonada antes do cut):
+//   "...é PORQUE [...corte de hesitação...] Então..."
+//   Se a palavra antes do corte tem "..." (Whisper marca com ellipsis
+//   frases interrompidas) OU é uma conjunção incompleta, também
+//   estende pra tras pra engolir ela.
+
+const INCOMPLETE_MARKERS = /\.\.\.$/;
+
+// Palavras que quando ficam pendentes antes de um cut viram frase
+// abandonada auditiva (usuário ouve "mas o problema é porque..." sem
+// continuação).
+const ORPHAN_CONNECTORS = new Set([
+  "porque", "porém", "que", "e", "mas", "então", "aí", "daí",
+  "quando", "se", "porque...", "então...", "mas...",
+]);
 
 function normalize(w) {
   return (w || "").toLowerCase().replace(/[.,!?;:"'()]/g, "").trim();
 }
 
-/**
- * Retorna a última palavra que termina em ou antes de t (com margem).
- */
+function rawWord(w) {
+  return (w || "").trim();
+}
+
 function wordEndingBefore(t, words, margin = 0.05) {
   let candidate = null;
   for (const w of words) {
@@ -33,9 +41,6 @@ function wordEndingBefore(t, words, margin = 0.05) {
   return candidate;
 }
 
-/**
- * Retorna a primeira palavra que começa em ou depois de t (com margem).
- */
 function wordStartingAfter(t, words, margin = 0.05) {
   for (const w of words) {
     if (w.start >= t - margin) return w;
@@ -44,40 +49,88 @@ function wordStartingAfter(t, words, margin = 0.05) {
 }
 
 /**
- * Estende um corte pra trás se a palavra antes é igual à palavra depois
- * (repetição no seam). Retorna o cut ajustado.
+ * Decide se o corte deve ser estendido pra trás e retorna o novo start.
+ * Retorna { newStart, reason, swallowedWord } ou null se não deve estender.
  */
-export function extendCutIfBoundaryRepetition(cut, words) {
-  if (!words?.length) return cut;
+function decideExtensionBackward(cut, words) {
   const before = wordEndingBefore(cut.start, words);
   const after = wordStartingAfter(cut.end, words);
-  if (!before || !after) return cut;
+  if (!before) return null;
+
+  const rBefore = rawWord(before.word);
   const nBefore = normalize(before.word);
-  const nAfter = normalize(after.word);
-  if (!nBefore || nBefore !== nAfter) return cut;
-  // Repetição! Estende pra trás pra swallowar a palavra "before".
-  return {
-    ...cut,
-    start: before.start,
-    edgeCleanup: {
-      extendedFrom: cut.start,
-      swallowedWord: before.word,
-      reason: "boundary_word_repetition",
-    },
-  };
+  const nAfter = after ? normalize(after.word) : "";
+
+  // Padrão A: repetição no seam
+  if (nAfter && nBefore === nAfter) {
+    return { newStart: before.start, reason: "boundary_word_repetition", swallowedWord: before.word };
+  }
+  // Padrão B: palavra antes do cut é conector abandonado ("porque...", "mas")
+  // OU tem ellipsis marcando frase interrompida
+  if (ORPHAN_CONNECTORS.has(nBefore) || INCOMPLETE_MARKERS.test(rBefore)) {
+    // Pega até a palavra ANTES desse conector (encolhe o KEEP mais).
+    const prevWord = wordEndingBefore(before.start - 0.01, words);
+    // Se prevWord também for conector abandonado, sobe mais uma
+    let target = before;
+    const chainLimit = 3;
+    let p = prevWord; let count = 0;
+    while (p && count < chainLimit && (ORPHAN_CONNECTORS.has(normalize(p.word)) || INCOMPLETE_MARKERS.test(rawWord(p.word)))) {
+      target = p;
+      p = wordEndingBefore(p.start - 0.01, words);
+      count += 1;
+    }
+    // Se target ainda é a palavra imediatamente antes, mas ela é
+    // abandonada, precisamos ir pelo menos 1 palavra atrás pra remover
+    // o abandono. Se target === before, retorna null (nada a fazer).
+    // Caso contrário estende pra trás.
+    if (target !== before || ORPHAN_CONNECTORS.has(nBefore)) {
+      return {
+        newStart: target.start,
+        reason: "abandoned_connector_before_cut",
+        swallowedWord: `${rawWord(target.word)}...${rBefore}`,
+      };
+    }
+  }
+  return null;
 }
 
 /**
- * Aplica em array de cuts. Só REMOVE são afetados.
+ * Aplica cleanup em array de EDL, ajustando REMOVE E o KEEP anterior
+ * pra ficar sem sobreposição.
  */
 export function cleanupCutEdges(edl, words) {
   if (!edl?.length || !words?.length) return { edl, extensions: 0 };
+  const sorted = [...edl].sort((a, b) => a.start - b.start);
   let extensions = 0;
-  const result = edl.map((e) => {
-    if (e.action !== "remove" && e.action !== "trim") return e;
-    const adjusted = extendCutIfBoundaryRepetition(e, words);
-    if (adjusted.edgeCleanup) extensions += 1;
-    return adjusted;
-  });
-  return { edl: result, extensions };
+
+  for (let i = 0; i < sorted.length; i++) {
+    const cur = sorted[i];
+    if (cur.action !== "remove" && cur.action !== "trim") continue;
+    const decision = decideExtensionBackward(cur, words);
+    if (!decision) continue;
+    // Estende o REMOVE pra trás
+    const originalStart = cur.start;
+    cur.start = decision.newStart;
+    cur.edgeCleanup = {
+      extendedFrom: originalStart,
+      reason: decision.reason,
+      swallowedWord: decision.swallowedWord,
+    };
+    extensions += 1;
+    // Ajusta o KEEP anterior pra terminar no novo start (evita overlap)
+    for (let j = i - 1; j >= 0; j--) {
+      const prev = sorted[j];
+      if (prev.action === "keep" && prev.end > decision.newStart) {
+        prev.end = decision.newStart;
+        // Se o KEEP virou vazio ou inválido, marca pra remover
+        if (prev.end <= prev.start + 0.02) prev._voidKeep = true;
+      } else if (prev.end <= decision.newStart) {
+        break; // KEEP anterior não overlap
+      }
+    }
+  }
+
+  // Remove KEEPs anulados
+  const filtered = sorted.filter((e) => !e._voidKeep);
+  return { edl: filtered, extensions };
 }
