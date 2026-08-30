@@ -44,9 +44,11 @@ export function applyCutDensityGuard(decided, profile, duration) {
   const downgradeIds = new Set();
   if (excessCount > 0) {
     // Rebaixa os `excessCount` de menor confidence, EXCETO surgical
-    // (stutter/false_start/abandoned_phrase — esses são cortes cirúrgicos
-    // de defeitos evidentes, não é o que polui a timeline).
-    const SURGICAL = new Set(["stutter", "false_start", "abandoned_phrase", "self_correction"]);
+    // (stutter/false_start/abandoned_phrase/low_clarity/filler quando alta conf).
+    // Adicionado low_clarity + filler porque estas capturam palavras
+    // esticadas e hesitações com alta confiança — não deveriam virar
+    // REVIEW só porque o vídeo tem muitos candidatos.
+    const SURGICAL = new Set(["stutter", "false_start", "abandoned_phrase", "self_correction", "low_clarity", "filler"]);
     let downgraded = 0;
     for (const c of removeCands) {
       if (downgraded >= excessCount) break;
