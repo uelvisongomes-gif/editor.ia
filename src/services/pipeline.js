@@ -35,6 +35,7 @@ import { estimateLoudness } from "./audio/loudnessAnalyzer.js";
 import { shouldApplyNoiseReduction } from "./audio/noiseReduction.js";
 import { computeDuckingEnvelope } from "./audio/musicDucking.js";
 import { runAudioDirector } from "./audio/audioDirector.js";
+import { applyUserStyleToProfile } from "./userStyleLearning.js";
 import { computeQualityScore } from "./qualityScoring.js";
 
 const STEPS = {
@@ -63,7 +64,9 @@ const throwIfAborted = (signal) => {
  * @param {(entry:{operation:string,model?:string,inputTokens?:number|null,outputTokens?:number|null,totalTokens?:number|null,latencyMs?:number,audioDurationSec?:number|null,audioBytes?:number|null})=>void} [args.onUsage]
  */
 export async function runEditingPipeline({ videoUrl, duration, profileId, onStep, reuse = {}, signal, onUsage }) {
-  const profile = getProfile(profileId);
+  // Fase 6: aplica estilo pessoal do usuário no profile base (só se confidence >= MEDIUM)
+  const baseProfile = getProfile(profileId);
+  const profile = applyUserStyleToProfile(baseProfile, { mode: profileId, duration });
   const step = (id) => onStep && onStep(id, STEPS[id]);
 
   let words = reuse.words;

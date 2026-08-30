@@ -16,6 +16,12 @@ import { AIAnalysisPanel } from "./components/AIAnalysisPanel.jsx";
 import { MusicLibrary } from "./components/MusicLibrary.jsx";
 import { FinalQCModal } from "./components/FinalQCModal.jsx";
 import { runFinalQC } from "./services/finalQC/finalQCOrchestrator.js";
+import { MyEditingStyle } from "./components/MyEditingStyle.jsx";
+import { recordEvent, recordUserDecisions } from "./services/userStyleLearning.js";
+import { ClipCollection } from "./components/ClipCollection.jsx";
+import { discoverClips } from "./services/clips/clipDiscoveryEngine.js";
+import { createClipQueue } from "./services/clips/clipJobQueue.js";
+import { buildClipEditState, computeStandaloneQuality } from "./services/clips/clipAutoEditor.js";
 import { getMusicById } from "./services/musicCatalog.js";
 import { AuthGate } from "./components/AuthGate.jsx";
 import { createHistory, pushState, undo as undoHistory, redo as redoHistory, canUndo, canRedo } from "./services/edlHistory.js";
@@ -982,6 +988,11 @@ export default function AiVideoEditor() {
   const [finalQCBusy, setFinalQCBusy] = useState(false);
   const [showFinalQCModal, setShowFinalQCModal] = useState(false);
   const [qcDebugMode, setQcDebugMode] = useState(false);
+  // Fase 7 · Clips
+  const [clipCandidates, setClipCandidates] = useState([]);
+  const [clipJobs, setClipJobs] = useState([]);
+  const clipQueueRef = useRef(null);
+  const sourceAnalysisRef = useRef(null);
   // Seleção de zoom para edição (excluir/redimensionar/mover/nível).
   const [selectedZoomId, setSelectedZoomId] = useState(null);
   // Ref pra drag state
@@ -1127,6 +1138,10 @@ export default function AiVideoEditor() {
     setProblemCandidates([]);
     setZoomEvents([]);
     setDimensionalQuality(null);
+    setClipCandidates([]);
+    setClipJobs([]);
+    if (clipQueueRef.current) { try { clipQueueRef.current.clear(); } catch {} clipQueueRef.current = null; }
+    sourceAnalysisRef.current = null;
     setNarrativeTopic("");
     setSmartDone(false);
     setSmartError("");
@@ -1660,6 +1675,25 @@ async function callMistakeDetectionAPI(words) {
       setPatternInterrupts(result.patternInterrupts || null);
       setDimensionalQuality(result.qualityScore || null);
       setAudioReport(result.audioReport || null);
+      // Fase 7 · Clip Discovery — só faz sentido em vídeos longos (>= 60s)
+      sourceAnalysisRef.current = result;
+      if (duration >= 60) {
+        try {
+          const disc = discoverClips({
+            narrative: result.narrative,
+            duration,
+            words: result.words,
+            mode: intensityId,
+            maxCandidates: 15,
+          });
+          setClipCandidates(disc.candidates || []);
+        } catch (err) {
+          console.warn("[clipDiscovery] falhou:", err.message);
+          setClipCandidates([]);
+        }
+      } else {
+        setClipCandidates([]);
+      }
       setNarrativeTopic(result.semantic.topic || "");
       // Auto-color: aplica SEMPRE após analise, boost "social ready"
       // (Reels/TikTok). Referência do usuário: "levemente mais claro,
@@ -2158,6 +2192,16 @@ async function callMistakeDetectionAPI(words) {
   // toggla deleted/action. Se não existe (o candidato era "detected_only"
   // ou "dropped" e nunca virou segment), splita a timeline no intervalo.
   const applyCandidateDecision = (cand, shouldRemove) => {
+    // Fase 6: registra decisão pra userStyleLearning
+    try {
+      recordEvent({
+        kind: shouldRemove ? "accept" : "restore",
+        target: "cut",
+        primaryType: cand.primaryType || cand.kind || "cut",
+        context: intensityId,
+        reason: "preference",
+      });
+    } catch {}
     applySegmentsChange((segs) => {
       // Procura segment que cubra este candidato.
       const covering = segs.find(
@@ -2413,6 +2457,66 @@ async function callMistakeDetectionAPI(words) {
     [platform]
   );
 
+  // Fase 7 · handlers de clip
+  const handleClipWatch = (clip) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = clip.start;
+      videoRef.current.play?.().catch(() => {});
+    }
+  };
+
+  const handleClipEdit = (clip) => {
+    // Coloca cursor no início do clip e ativa preview
+    handleClipWatch(clip);
+    setPreviewMode(false);
+    showToast?.(`Clip "${clip.hook?.slice(0, 40)}..." selecionado`);
+  };
+
+  const ensureClipQueue = () => {
+    if (clipQueueRef.current) return clipQueueRef.current;
+    const q = createClipQueue({
+      onProgress: (jobs) => setClipJobs(jobs),
+      processorFn: async (clip, progress) => {
+        // Item 7.13: reutiliza pipeline (só constrói estado; render real fica pra próximo)
+        progress(20, "processing");
+        const clipState = buildClipEditState({ clip, sourceAnalysis: sourceAnalysisRef.current });
+        if (!clipState) throw new Error("sem análise de origem");
+        progress(60, "rendering");
+        // Placeholder: futuro chamará renderVideo(clipState.segments...)
+        const standaloneScore = computeStandaloneQuality({ clip, clipState });
+        progress(90, "qc");
+        // Item 7.31: reprovar clips com standalone < 40
+        if (standaloneScore < 40) {
+          throw new Error(`Clip com baixa qualidade standalone (${standaloneScore}/100)`);
+        }
+        await new Promise((r) => setTimeout(r, 200));
+        progress(100);
+        return { standaloneScore, clipState, sourceTraceability: { start: clip.start, end: clip.end } };
+      },
+      maxParallel: 1,
+    });
+    q.start();
+    clipQueueRef.current = q;
+    return q;
+  };
+
+  const handleGenerateClip = (clip) => {
+    const q = ensureClipQueue();
+    q.enqueue(clip);
+  };
+  const handleGenerateAll = () => {
+    const q = ensureClipQueue();
+    clipCandidates.forEach((c) => q.enqueue(c));
+  };
+  const handleGenerateSelected = (ids) => {
+    const q = ensureClipQueue();
+    clipCandidates.filter((c) => ids.includes(c.id)).forEach((c) => q.enqueue(c));
+  };
+  const handleClearClipJobs = () => {
+    clipQueueRef.current?.clear();
+    setClipJobs([]);
+  };
+
   const doActualExport = async () => {
     setIsExporting(true);
     setExportProgress(0);
@@ -2433,6 +2537,29 @@ async function callMistakeDetectionAPI(words) {
       });
       setExportedUrl(URL.createObjectURL(blob));
       setExportProgress(100);
+      // Fase 6: registra decisões acumuladas no vídeo exportado
+      try {
+        const decisions = problemCandidates.map((c) => ({
+          primaryType: c.primaryType,
+          userDecision: c.finalAction === "remove" ? "accept" : "keep",
+        }));
+        recordUserDecisions(decisions, { context: intensityId });
+        // Registra que exportou com zoom on/off, captions on/off, música etc
+        recordEvent({
+          kind: zoomEnabled ? "accept" : "reject",
+          target: "zoom", context: intensityId, reason: "preference",
+        });
+        recordEvent({
+          kind: captions.length ? "accept" : "reject",
+          target: "caption", context: intensityId, reason: "preference",
+          after: { position: captionPosition, wordCount: captions.length },
+        });
+        recordEvent({
+          kind: musicVolume > 0 ? "accept" : "reject",
+          target: "music", context: intensityId, reason: "preference",
+          after: { volume: musicVolume },
+        });
+      } catch {}
     } catch (err) {
       console.error(err);
       setExportError(err.message || "Falha ao exportar o vídeo.");
@@ -4035,6 +4162,23 @@ async function callMistakeDetectionAPI(words) {
                     visualPlan={visualPlan}
                     audioReport={audioReport}
                   />
+                  <div className="mt-2">
+                    <MyEditingStyle />
+                  </div>
+                  {clipCandidates.length > 0 && (
+                    <div className="mt-2">
+                      <ClipCollection
+                        clips={clipCandidates}
+                        jobs={clipJobs}
+                        onWatch={handleClipWatch}
+                        onEdit={handleClipEdit}
+                        onGenerate={handleGenerateClip}
+                        onGenerateAll={handleGenerateAll}
+                        onGenerateSelected={handleGenerateSelected}
+                        onClearJobs={handleClearClipJobs}
+                      />
+                    </div>
+                  )}
                   {dimensionalQuality && (
                     <div style={{ background: "#1A0F28", border: "1px solid #2A1F38" }} className="mt-3 rounded-lg p-3">
                       <div className="flex items-center justify-between mb-2">
