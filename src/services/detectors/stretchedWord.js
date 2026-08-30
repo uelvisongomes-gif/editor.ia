@@ -33,14 +33,25 @@ export function detectStretchedWord({ words } = {}) {
     const start = w.start + MARGIN;
     const end = w.end - MARGIN;
     if (end - start < 0.5) continue;
+    // Confiança escala com quanto passou do threshold. Palavras muito
+    // esticadas (>2.5s) são quase certeza de repetição/correção escondida.
+    //   1.5-2.0s → 0.68 (REVIEW)
+    //   2.0-2.5s → 0.75 (REVIEW)
+    //   2.5-3.0s → 0.85 (AUTO-CUT)
+    //   3.0-4.0s → 0.90-0.94 (AUTO-CUT alta confiança)
+    let confidence;
+    if (dur < 2.0) confidence = 0.68;
+    else if (dur < 2.5) confidence = 0.75;
+    else if (dur < 3.0) confidence = 0.85;
+    else confidence = Math.min(0.94, 0.90 + (dur - 3.0) * 0.04);
     out.push({
       start,
       end,
-      confidence: 0.65, // fica em REVIEW, nunca REMOVE
+      confidence,
       reason: "low_clarity",
       source: "speechError",
       detectedBy: "heuristic",
-      text: `(palavra "${w.word}" com duração incomum — ${dur.toFixed(1)}s. Escute pra ver se tem correção/repetição escondida)`,
+      text: `(palavra "${w.word}" com duração incomum — ${dur.toFixed(1)}s. Provavelmente repetição/correção escondida)`,
     });
   }
   return out;

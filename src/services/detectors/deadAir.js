@@ -115,7 +115,10 @@ export function detectSoundWithoutWord({ words, waveform } = {}) {
     } else {
       if (winStart != null && winTotal >= MIN_HESIT_DUR) {
         const winEnd = b.start;
-        const conf = winStart < 2 ? 0.9 : 0.78;
+        // Pre-roll (0-2s): 0.90. Mid-fala (>2s): 0.85 — som durante
+        // conteúdo com alta chance de ser hesitação ("ehh" que Whisper
+        // não transcreveu). Auto-cut acima de 0.80.
+        const conf = winStart < 2 ? 0.9 : 0.85;
         out.push({
           start: winStart,
           end: winEnd,
