@@ -2436,7 +2436,7 @@ async function callMistakeDetectionAPI(words) {
                 fontFamily: "'Inter Tight',sans-serif",
                 color: "#A090B8", fontSize: 12,
                 letterSpacing: "0.14em", textTransform: "uppercase", fontWeight: 500,
-              }}>Editor · da ideia à publicação</p>
+              }}>Editor com IA</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
