@@ -261,6 +261,36 @@ test("StyleEngine: estilos diferentes = outputs diferentes (teste 29)", () => {
   // Viral deve gerar mais eventos que natural
   return viral.events.length > natural.events.length;
 });
+import { bridgeStyleEventsToApp, chooseVisualSource } from "../styleEngine/styleEventsBridge.js";
+
+test("Bridge: converte zoom+text+media em shapes do App", () => {
+  const events = [
+    { id: "1", category: "zoom", animation: "punch_in", start: 5, end: 6, params: { scale: 1.12 }, confidence: 0.9, reason: "" },
+    { id: "2", category: "text", animation: "big_number", start: 8, end: 10, params: { text: "97%", sizeVw: 12 }, confidence: 0.9, reason: "" },
+    { id: "3", category: "media", animation: "broll_overlay", start: 12, end: 15, params: { query: "escritorio", opacity: 0.9, mode: "pip" }, confidence: 0.8, reason: "" },
+  ];
+  const b = bridgeStyleEventsToApp(events);
+  return b.zoomEvents.length === 1 && b.zoomEvents[0].level === "high"
+    && b.overlays.length === 1 && b.overlays[0].kind === "big_number" && b.overlays[0].sizeVw === 12
+    && b.brollSuggestions.length === 1 && b.brollSuggestions[0].mode === "pip";
+});
+test("Bridge: chooseVisualSource cai pro pipeline se sem styleResult", () => {
+  const src = chooseVisualSource({
+    styleResult: null, brollPlan: { suggestions: [{ id: "a", start: 0, end: 3 }] },
+    graphicsPlan: { overlays: [{ id: "b", start: 0, end: 3 }] }, zoomEvents: [{ id: "z", start: 0, end: 1 }],
+  });
+  return src.source === "pipeline" && src.zoomEvents.length === 1 && src.overlays.length === 1 && src.brollSuggestions.length === 1;
+});
+test("Bridge: chooseVisualSource usa styleResult quando presente", () => {
+  const src = chooseVisualSource({
+    styleResult: { events: [{ id: "1", category: "zoom", animation: "punch_in", start: 5, end: 6, params: { scale: 1.08 }, confidence: 0.9 }] },
+    brollPlan: { suggestions: [{ id: "a", start: 0, end: 3 }] },
+    graphicsPlan: { overlays: [{ id: "b", start: 0, end: 3 }] },
+    zoomEvents: [{ id: "z", start: 0, end: 1 }],
+  });
+  return src.source === "style_engine" && src.zoomEvents.length === 1 && src.zoomEvents[0].source === "style_engine";
+});
+
 test("StyleEngine: sem NUMBER trigger não emite big_number (teste 31)", () => {
   const analysis = {
     narrative: { timeline: [{ start: 0, end: 5, role: "hook", importance: "high", confidence: 90, text: "olá" }]},

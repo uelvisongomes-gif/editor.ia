@@ -25,6 +25,7 @@ import { buildClipEditState, computeStandaloneQuality } from "./services/clips/c
 import { StylePicker } from "./components/StylePicker.jsx";
 import { StyleDebugPanel } from "./components/StyleDebugPanel.jsx";
 import { runStyleEngine } from "./services/styleEngine/styleEngine.js";
+import { chooseVisualSource } from "./services/styleEngine/styleEventsBridge.js";
 import { getMusicById } from "./services/musicCatalog.js";
 import { AuthGate } from "./components/AuthGate.jsx";
 import { createHistory, pushState, undo as undoHistory, redo as redoHistory, canUndo, canRedo } from "./services/edlHistory.js";
@@ -1339,6 +1340,12 @@ export default function AiVideoEditor() {
   const activeSegments = useMemo(
     () => segments.filter((s) => !s.deleted).sort((a, b) => a.start - b.start),
     [segments]
+  );
+  // Style Engine bridge — quando styleResult existe, substitui overlays/broll/zoom.
+  // Assim o renderer canvas efetivamente reflete o estilo selecionado.
+  const effectiveVisuals = useMemo(() =>
+    chooseVisualSource({ styleResult, brollPlan, graphicsPlan, zoomEvents, transitionPlan: null }),
+    [styleResult, brollPlan, graphicsPlan, zoomEvents]
   );
   const zoomCues = useMemo(
     () => (wordTimestamps.length ? findZoomCuesFromWords(wordTimestamps) : null),
@@ -3541,55 +3548,77 @@ async function callMistakeDetectionAPI(words) {
                     );
                   })()}
 
-                  {/* Graphics overlays: big_number + text_overlay ativos no timestamp */}
-                  {graphicsPlan?.overlays?.filter((o) => currentTime >= o.start && currentTime <= o.end).map((o, i) => (
-                    <div
-                      key={"gfx-" + i}
-                      className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
-                      style={{
-                        top: o.kind === "big_number" ? "18%" : "28%",
-                        textAlign: "center",
-                        animation: "fadeIn 0.25s ease-out",
-                      }}
-                    >
-                      {o.kind === "big_number" ? (
+                  {/* Graphics overlays: big_number + text_overlay + graphic ativos no timestamp.
+                      Fonte: Style Engine (via bridge) se selecionado; senão graphicsPlan do pipeline. */}
+                  {effectiveVisuals.overlays.filter((o) => currentTime >= o.start && currentTime <= o.end).map((o, i) => {
+                    const primary = o.colorFrom || "#FF6A2B";
+                    const secondary = o.colorTo || "#FF3EA5";
+                    const gradient = `linear-gradient(92deg,${primary} 0%,${secondary} 100%)`;
+                    const font = o.font || "'Archivo Black','Inter Tight',sans-serif";
+                    if (o.kind === "big_number") {
+                      const vw = o.sizeVw || 10;
+                      return (
+                        <div key={"gfx-" + i} className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+                             style={{ top: o.position || "18%", textAlign: "center", animation: "fadeIn 0.25s ease-out" }}>
+                          <div style={{
+                            fontFamily: font,
+                            fontSize: `clamp(48px, ${vw}vw, ${vw * 12}px)`,
+                            fontWeight: 900, lineHeight: 1,
+                            background: gradient,
+                            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                            textShadow: `0 4px 24px ${secondary}80`,
+                            whiteSpace: "pre-line",
+                          }}>{o.text}</div>
+                        </div>
+                      );
+                    }
+                    if (o.kind === "graphic") {
+                      // subkind: underline, arrow, callout, box, badge, checklist, progress, counter
+                      return (
+                        <div key={"gfx-" + i} className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+                             style={{ top: "50%", transform: "translate(-50%,-50%)", textAlign: "center", animation: "fadeIn 0.25s ease-out" }}>
+                          <div style={{
+                            fontFamily: font, fontSize: "clamp(18px, 3.5vw, 32px)",
+                            fontWeight: 800, color: "#150610",
+                            background: gradient, padding: "6px 14px", borderRadius: 6,
+                            border: `2px solid ${primary}`,
+                          }}>{o.text || o.subkind?.toUpperCase() || "•"}</div>
+                        </div>
+                      );
+                    }
+                    // text_overlay / text_pop / text_slide default
+                    return (
+                      <div key={"gfx-" + i} className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+                           style={{ top: o.position === "top" ? "12%" : "28%", textAlign: "center", animation: "fadeIn 0.25s ease-out" }}>
                         <div style={{
-                          fontFamily: "'Archivo Black','Inter Tight',sans-serif",
-                          fontSize: "clamp(48px, 10vw, 120px)",
-                          fontWeight: 900,
-                          lineHeight: 1,
-                          background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)",
-                          WebkitBackgroundClip: "text",
-                          WebkitTextFillColor: "transparent",
-                          textShadow: "0 4px 24px rgba(255,62,165,0.5)",
-                          whiteSpace: "pre-line",
-                        }}>{o.text}</div>
-                      ) : (
-                        <div style={{
-                          fontFamily: "'Archivo Black','Inter Tight',sans-serif",
+                          fontFamily: font,
                           fontSize: "clamp(24px, 5vw, 48px)",
-                          fontWeight: 900,
-                          background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)",
-                          color: "#150610",
-                          padding: "6px 16px",
-                          borderRadius: 8,
-                          boxShadow: "0 8px 32px rgba(255,62,165,0.4)",
+                          fontWeight: 900, background: gradient, color: "#150610",
+                          padding: "6px 16px", borderRadius: 8,
+                          boxShadow: `0 8px 32px ${secondary}66`,
                           display: "inline-block",
                         }}>{o.text}</div>
-                      )}
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
 
-                  {/* B-roll — se tem media real, renderiza vídeo em picture-in-picture. Senão só tag. */}
-                  {brollPlan?.suggestions?.filter((b) => currentTime >= b.start && currentTime <= b.end).map((b, i) => {
+                  {/* B-roll — via Style Engine bridge quando estilo selecionado, senão brollPlan.
+                      Se tem media real: vídeo overlay respeitando opacity/mode. Senão: tag. */}
+                  {effectiveVisuals.brollSuggestions.filter((b) => currentTime >= b.start && currentTime <= b.end).map((b, i) => {
                     const clip = b.media?.[0];
+                    const opacity = b.opacity ?? 0.85;
+                    const mode = b.mode || "fullscreen";
                     if (clip?.url) {
+                      const isPip = mode === "pip" || mode === "picture_in_picture";
                       return (
-                        <div key={"br-" + i} className="absolute inset-0 pointer-events-none" style={{ opacity: 0.85 }}>
+                        <div key={"br-" + i} className="absolute pointer-events-none"
+                             style={isPip
+                               ? { top: "6%", right: "6%", width: "30%", height: "30%", opacity, borderRadius: 8, overflow: "hidden", boxShadow: "0 4px 20px rgba(0,0,0,0.4)" }
+                               : { inset: 0, opacity }}>
                           <video
                             src={clip.url}
                             autoPlay muted loop playsInline
-                            style={{ width: "100%", height: "100%", objectFit: "cover", mixBlendMode: "normal" }}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
                           />
                           <div className="absolute bottom-2 right-2" style={{
                             background: "rgba(0,0,0,0.6)", color: "#fff",
