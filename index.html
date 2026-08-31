@@ -54,6 +54,69 @@
       }
       /* Glow em elementos ativos */
       .crie-active-glow { box-shadow: var(--crie-glow); }
+
+      /* Style Engine · keyframes por animação — cada estilo usa uma keyframe diferente */
+      @keyframes fxPop {
+        0%   { opacity: 0; transform: scale(0.4) translateY(20px); }
+        60%  { opacity: 1; transform: scale(1.15) translateY(-4px); }
+        100% { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      @keyframes fxBigNumber {
+        0%   { opacity: 0; transform: scale(0.2); filter: blur(20px); }
+        50%  { opacity: 1; transform: scale(1.2); filter: blur(0); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      @keyframes fxSlide {
+        0%   { opacity: 0; transform: translateX(-80px); }
+        100% { opacity: 1; transform: translateX(0); }
+      }
+      @keyframes fxSlideRight {
+        0%   { opacity: 0; transform: translateX(60px); }
+        100% { opacity: 1; transform: translateX(0); }
+      }
+      @keyframes fxTypewriter {
+        0%   { opacity: 0; width: 0; letter-spacing: -0.5em; }
+        50%  { opacity: 1; }
+        100% { opacity: 1; width: auto; letter-spacing: 0; }
+      }
+      @keyframes fxFadeUp {
+        0%   { opacity: 0; transform: translateY(30px); }
+        100% { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes fxBounce {
+        0%   { opacity: 0; transform: translateY(-40px) scale(0.5); }
+        50%  { transform: translateY(6px) scale(1.1); }
+        75%  { transform: translateY(-2px) scale(0.98); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes fxScale {
+        0%   { opacity: 0; transform: scale(0.6); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      @keyframes fxDrawLine {
+        0%   { opacity: 0; width: 0; }
+        30%  { opacity: 1; }
+        100% { opacity: 1; width: 100%; }
+      }
+      @keyframes fxBadgePulse {
+        0%   { opacity: 0; transform: scale(0.5) rotate(-8deg); }
+        40%  { opacity: 1; transform: scale(1.3) rotate(4deg); }
+        70%  { transform: scale(0.95) rotate(-2deg); }
+        100% { opacity: 1; transform: scale(1) rotate(0); }
+      }
+      @keyframes fxCirclePulse {
+        0%   { opacity: 0; transform: scale(2); box-shadow: 0 0 0 0 rgba(255,106,43,0.6); }
+        70%  { opacity: 1; transform: scale(0.95); box-shadow: 0 0 0 20px rgba(255,106,43,0); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      @keyframes fxWhipLeft {
+        0%   { transform: translateX(120%) skewX(-25deg); filter: blur(12px); opacity: 0; }
+        100% { transform: translateX(0) skewX(0); filter: blur(0); opacity: 1; }
+      }
+      @keyframes fxFlash {
+        0%   { background: rgba(255,255,255,0.9); }
+        100% { background: transparent; }
+      }
     </style>
   </head>
   <body>

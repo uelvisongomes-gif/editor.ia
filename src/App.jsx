@@ -2497,10 +2497,15 @@ async function callMistakeDetectionAPI(words) {
           seed: `proj-${videoUrl?.slice(-16) || "default"}`,
         });
         setStyleResult(sr);
-        showToast?.(`Estilo "${sr.summary?.styleName}" aplicado`);
+        const eventCount = sr?.summary?.finalEventCount || 0;
+        showToast?.(`Estilo "${sr.summary?.styleName}" · ${eventCount} efeitos`);
       } catch (err) {
         console.warn("[styleEngine] falhou:", err.message);
+        showToast?.("Falha ao trocar estilo");
       }
+    } else {
+      // Ainda não analisou — avisa que precisa rodar primeiro
+      showToast?.("Roda 'Edição inteligente' pra ver o estilo em ação");
     }
   };
 
@@ -3553,18 +3558,37 @@ async function callMistakeDetectionAPI(words) {
                     );
                   })()}
 
-                  {/* Graphics overlays: big_number + text_overlay + graphic ativos no timestamp.
-                      Fonte: Style Engine (via bridge) se selecionado; senão graphicsPlan do pipeline. */}
+                  {/* Graphics overlays: cada animation tem CSS único (pop/slide/typewriter/bounce).
+                      Fonte: Style Engine bridge se estilo selecionado; senão graphicsPlan do pipeline. */}
                   {effectiveVisuals.overlays.filter((o) => currentTime >= o.start && currentTime <= o.end).map((o, i) => {
                     const primary = o.colorFrom || "#FF6A2B";
                     const secondary = o.colorTo || "#FF3EA5";
                     const gradient = `linear-gradient(92deg,${primary} 0%,${secondary} 100%)`;
                     const font = o.font || "'Archivo Black','Inter Tight',sans-serif";
+                    const anim = o.animation || o.kind;
+                    // Cada animation → keyframe CSS distinto
+                    const animCss = {
+                      big_number:    "fxBigNumber 0.5s cubic-bezier(0.34,1.56,0.64,1)",
+                      text_pop:      "fxPop 0.4s cubic-bezier(0.34,1.56,0.64,1)",
+                      text_slide:    "fxSlide 0.45s ease-out",
+                      text_typewriter:"fxTypewriter 0.6s steps(20)",
+                      quote_card:    "fxFadeUp 0.6s ease-out",
+                      counter:       "fxBounce 0.55s cubic-bezier(0.34,1.56,0.64,1)",
+                      underline:     "fxDrawLine 0.6s ease-out",
+                      callout:       "fxSlideRight 0.4s ease-out",
+                      box:           "fxScale 0.4s cubic-bezier(0.34,1.56,0.64,1)",
+                      badge:         "fxBadgePulse 0.7s ease-out",
+                      checklist:     "fxFadeUp 0.5s ease-out",
+                      progress:      "fxSlide 0.5s ease-out",
+                      arrow:         "fxSlideRight 0.4s ease-out",
+                      circle_highlight:"fxCirclePulse 0.6s ease-out",
+                    }[anim] || "fxPop 0.4s ease-out";
+
                     if (o.kind === "big_number") {
                       const vw = o.sizeVw || 10;
                       return (
                         <div key={"gfx-" + i} className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
-                             style={{ top: o.position || "18%", textAlign: "center", animation: "fadeIn 0.25s ease-out" }}>
+                             style={{ top: o.position || "18%", textAlign: "center", animation: animCss }}>
                           <div style={{
                             fontFamily: font,
                             fontSize: `clamp(48px, ${vw}vw, ${vw * 12}px)`,
@@ -3577,24 +3601,74 @@ async function callMistakeDetectionAPI(words) {
                         </div>
                       );
                     }
+                    if (anim === "quote_card") {
+                      return (
+                        <div key={"gfx-" + i} className="absolute pointer-events-none"
+                             style={{ left: "10%", right: "10%", top: "35%", animation: animCss }}>
+                          <div style={{
+                            fontFamily: font, fontSize: "clamp(20px, 3.5vw, 38px)",
+                            fontWeight: 700, background: "rgba(15,6,33,0.92)",
+                            color: "#F5EFFF", padding: "22px 26px", borderRadius: 12,
+                            borderLeft: `4px solid ${primary}`, lineHeight: 1.35,
+                            fontStyle: "italic",
+                          }}>"{o.text}"</div>
+                        </div>
+                      );
+                    }
+                    if (anim === "counter") {
+                      return (
+                        <div key={"gfx-" + i} className="absolute pointer-events-none"
+                             style={{ left: "6%", top: "12%", animation: animCss }}>
+                          <div style={{
+                            fontFamily: font, fontSize: "clamp(32px, 6vw, 72px)",
+                            fontWeight: 900, background: gradient,
+                            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                          }}>{o.text}</div>
+                        </div>
+                      );
+                    }
+                    if (anim === "underline") {
+                      return (
+                        <div key={"gfx-" + i} className="absolute pointer-events-none"
+                             style={{ left: "50%", top: "58%", transform: "translateX(-50%)", animation: animCss, textAlign: "center" }}>
+                          <div style={{
+                            fontFamily: font, fontSize: "clamp(20px, 4vw, 36px)",
+                            fontWeight: 800, color: primary,
+                            borderBottom: `4px solid ${primary}`, paddingBottom: 4,
+                          }}>{o.text}</div>
+                        </div>
+                      );
+                    }
+                    if (anim === "badge") {
+                      return (
+                        <div key={"gfx-" + i} className="absolute pointer-events-none"
+                             style={{ top: "10%", right: "6%", animation: animCss }}>
+                          <div style={{
+                            fontFamily: font, fontSize: "clamp(14px, 2.5vw, 22px)",
+                            fontWeight: 900, background: gradient, color: "#0F0621",
+                            padding: "8px 16px", borderRadius: 999,
+                            boxShadow: `0 6px 24px ${secondary}80`,
+                          }}>{o.text || "NOVO"}</div>
+                        </div>
+                      );
+                    }
                     if (o.kind === "graphic") {
-                      // subkind: underline, arrow, callout, box, badge, checklist, progress, counter
+                      // callout, box, checklist, progress, arrow, circle_highlight
                       return (
                         <div key={"gfx-" + i} className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
-                             style={{ top: "50%", transform: "translate(-50%,-50%)", textAlign: "center", animation: "fadeIn 0.25s ease-out" }}>
+                             style={{ top: "45%", transform: "translate(-50%,-50%)", textAlign: "center", animation: animCss }}>
                           <div style={{
                             fontFamily: font, fontSize: "clamp(18px, 3.5vw, 32px)",
                             fontWeight: 800, color: "#150610",
-                            background: gradient, padding: "6px 14px", borderRadius: 6,
-                            border: `2px solid ${primary}`,
+                            background: gradient, padding: "8px 18px", borderRadius: 8,
                           }}>{o.text || o.subkind?.toUpperCase() || "•"}</div>
                         </div>
                       );
                     }
-                    // text_overlay / text_pop / text_slide default
+                    // Fallback: text_pop / text_slide / text_typewriter
                     return (
                       <div key={"gfx-" + i} className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
-                           style={{ top: o.position === "top" ? "12%" : "28%", textAlign: "center", animation: "fadeIn 0.25s ease-out" }}>
+                           style={{ top: o.position === "top" ? "12%" : "28%", textAlign: "center", animation: animCss }}>
                         <div style={{
                           fontFamily: font,
                           fontSize: "clamp(24px, 5vw, 48px)",
