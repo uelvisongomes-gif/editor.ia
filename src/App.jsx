@@ -2837,6 +2837,11 @@ async function callMistakeDetectionAPI(words) {
                     IA encontra erros e edita seu vídeo.
                   </p>
 
+                  {/* Estilo de edição — SEMPRE visível (antes de analisar) */}
+                  <div className="mb-3">
+                    <StylePicker selectedId={selectedStyleId} onSelect={handleStyleChange} />
+                  </div>
+
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <button
                       onClick={() => setSmartZoomEnabled((v) => !v)}
@@ -4231,9 +4236,6 @@ async function callMistakeDetectionAPI(words) {
                     visualPlan={visualPlan}
                     audioReport={audioReport}
                   />
-                  <div className="mt-2">
-                    <StylePicker selectedId={selectedStyleId} onSelect={handleStyleChange} />
-                  </div>
                   {styleResult && (
                     <StyleDebugPanel styleResult={styleResult} open={styleDebugOpen} onToggle={() => setStyleDebugOpen((v) => !v)} />
                   )}

@@ -156,14 +156,19 @@ const FIXERS = {
   },
   overlay_in_safe_area: (issue, state) => ({ patch: { overlaySafeAreaAdjusted: true } }),
 
-  // Hook slow start
+  // Hook slow start — NÃO auto-fix por default (agora vira sugestão manual
+  // no hookAndCtaChecker). Mantido pra compat: se alguém chamar direto, usa
+  // margem de 0.6s antes da primeira palavra pra preservar contexto/respiração.
   hook_slow_start: (issue, state) => {
-    // Recorta início do primeiro segmento até 200ms antes da primeira palavra
     const firstWordStart = issue.params.firstWordStart;
     if (!Number.isFinite(firstWordStart)) return { patch: null };
+    const CONTEXT_MARGIN_SEC = 0.6;
     const segments = [...state.segments];
     if (segments[0]) {
-      segments[0] = { ...segments[0], start: Math.max(0, firstWordStart - 0.2) };
+      const newStart = Math.max(0, firstWordStart - CONTEXT_MARGIN_SEC);
+      // Nunca cortar mais que 2/3 do primeiro segmento — safety
+      const maxCut = segments[0].start + (segments[0].end - segments[0].start) * 0.66;
+      segments[0] = { ...segments[0], start: Math.min(newStart, maxCut) };
     }
     return { patch: { segments } };
   },

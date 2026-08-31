@@ -13,17 +13,20 @@ export function checkHook({ narrative, segments = [], words = [] } = {}) {
   const firstSeg = active[0];
   const hook = narrative?.timeline?.find((n) => n.role === "hook");
 
-  // 1. Demora pra começar (silêncio inicial)
+  // 1. Demora pra começar (silêncio inicial). Só considera "demorado" acima
+  // de 2.5s — pausas curtas (respiração, cenário, olhar) são legítimas e o
+  // usuário geralmente prefere preservar. NÃO é auto_fixable — vira sugestão.
   const firstWord = words.find((w) => w.start >= firstSeg.start && w.start < firstSeg.start + HOOK_WINDOW_SEC);
-  if (!firstWord || firstWord.start - firstSeg.start > 1.2) {
+  const delayAtStart = firstWord ? firstWord.start - firstSeg.start : 0;
+  if (delayAtStart > 2.5) {
     issues.push(makeIssue({
       type: "hook_slow_start",
-      severity: SEVERITY.HIGH,
+      severity: SEVERITY.MEDIUM,
       start: firstSeg.start,
-      end: firstSeg.start + 1.5,
-      description: `Início demorado — primeira palavra em ${firstWord ? firstWord.start.toFixed(2) + "s" : "não encontrada"}`,
-      auto_fixable: true,
-      params: { firstWordStart: firstWord?.start, action: "trim_start" },
+      end: firstSeg.start + delayAtStart,
+      description: `Início com ${delayAtStart.toFixed(1)}s de silêncio (revisar manualmente)`,
+      auto_fixable: false,
+      params: { firstWordStart: firstWord?.start, action: "review_manually" },
       checker: "hook",
     }));
   }
