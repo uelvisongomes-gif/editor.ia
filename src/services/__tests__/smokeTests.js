@@ -150,6 +150,126 @@ test("Clip Queue: enqueue e state transitions", async () => {
   return snap.every((j) => j.status === "completed") && snap.length === 2;
 });
 
+// -------- STYLE ENGINE --------
+import { listStyles, getStyleById, BASE_STYLE_IDS } from "../styleEngine/styleRegistry.js";
+import { extractTriggers } from "../styleEngine/triggerEngine.js";
+import { runAnimation, listAnimations, animationExists } from "../styleEngine/animationRegistry.js";
+import { resolveConflicts } from "../styleEngine/conflictResolver.js";
+import { applyDensityBudget, applyCooldowns } from "../styleEngine/visualDensityBudget.js";
+import { runStyleEngine } from "../styleEngine/styleEngine.js";
+import { createSeededRng } from "../styleEngine/seedRandom.js";
+
+test("StyleRegistry: 11 base styles carregam", () => {
+  const styles = listStyles();
+  return styles.length >= 11 && BASE_STYLE_IDS.every((id) => getStyleById(id));
+});
+test("StyleRegistry: REFERENCE_DYNAMIC_01 herda de dynamic_creator_01", () => {
+  const ref = getStyleById("reference_dynamic_01");
+  return ref && ref.triggers?.HOOK?.length > 0 && ref.brandKit?.primary != null;
+});
+test("AnimationRegistry: 40+ animações disponíveis", () => {
+  return listAnimations().length >= 40 && animationExists("punch_in") && animationExists("big_number");
+});
+test("AnimationRegistry: fallback pra hard_cut se animação não existe", () => {
+  const evt = runAnimation("nonexistent_xyz", { t: 5, styleId: "test" });
+  return evt && evt.animation === "hard_cut";
+});
+test("TriggerEngine: extrai HOOK/CTA/NUMBER/PROBLEM", () => {
+  const narrative = { timeline: [
+    { start: 0, end: 5, role: "hook", importance: "high", confidence: 90, text: "olha o segredo" },
+    { start: 10, end: 15, role: "problem", importance: "medium", confidence: 75, text: "o problema é" },
+    { start: 20, end: 25, role: "cta", importance: "high", confidence: 85, text: "comenta aqui" },
+  ]};
+  const words = [{ start: 12, end: 13, word: "97%" }];
+  const t = extractTriggers({ narrative, words });
+  const types = new Set(t.map((x) => x.type));
+  return types.has("HOOK") && types.has("CTA") && types.has("PROBLEM") && types.has("NUMBER");
+});
+test("ConflictResolver: mesma categoria vira exclusive", () => {
+  const events = [
+    { id: "a", category: "zoom", start: 5, end: 6, confidence: 0.9 },
+    { id: "b", category: "zoom", start: 5.02, end: 6, confidence: 0.5 },
+  ];
+  const { kept, dropped } = resolveConflicts(events);
+  return kept.length === 1 && dropped.length === 1 && kept[0].id === "a";
+});
+test("VisualDensityBudget: excesso vira dropped", () => {
+  const events = Array.from({ length: 20 }, (_, i) => ({
+    id: `e${i}`, category: "zoom", start: i * 0.3, end: i * 0.3 + 0.5, confidence: 0.5,
+  }));
+  const { kept, dropped } = applyDensityBudget(events, { density: "low", duration: 10 });
+  return kept.length < events.length && dropped.length > 0;
+});
+test("Cooldowns: respeitados por categoria", () => {
+  const events = [
+    { id: "a", category: "zoom", start: 0, end: 1, confidence: 0.9 },
+    { id: "b", category: "zoom", start: 1.2, end: 2, confidence: 0.9 },
+    { id: "c", category: "zoom", start: 5, end: 6, confidence: 0.9 },
+  ];
+  const { kept } = applyCooldowns(events, { zoom: 3 });
+  return kept.length === 2 && kept.some((k) => k.id === "a") && kept.some((k) => k.id === "c");
+});
+test("SeedRandom: mesmo seed produz mesma sequência", () => {
+  const r1 = createSeededRng("proj-1");
+  const r2 = createSeededRng("proj-1");
+  return r1() === r2() && r1() === r2();
+});
+test("SeedRandom: seeds diferentes produzem sequências diferentes", () => {
+  const r1 = createSeededRng("proj-1");
+  const r2 = createSeededRng("proj-2");
+  return r1() !== r2();
+});
+test("StyleEngine: end-to-end com Viral Fast produz eventos", () => {
+  const analysis = {
+    narrative: { timeline: [
+      { start: 0, end: 3, role: "hook", importance: "high", confidence: 90, text: "veja isto" },
+      { start: 5, end: 10, role: "problem", importance: "medium", confidence: 75, text: "o problema" },
+      { start: 12, end: 18, role: "proof", importance: "critical", confidence: 92, text: "temos 500 alunos" },
+      { start: 20, end: 25, role: "cta", importance: "high", confidence: 88, text: "clica no link" },
+    ]},
+    words: [{ start: 13, end: 14, word: "500" }],
+    productMoments: { moments: [] },
+    patternInterrupts: { interrupts: [] },
+  };
+  const result = runStyleEngine({ styleId: "viral_fast_01", analysis, duration: 30, seed: "test" });
+  return result.events.length > 0 && result.summary.finalEventCount > 0;
+});
+test("StyleEngine: mesmo seed dá resultado idêntico", () => {
+  const analysis = {
+    narrative: { timeline: [
+      { start: 0, end: 3, role: "hook", importance: "high", confidence: 90, text: "veja" },
+      { start: 5, end: 10, role: "proof", importance: "high", confidence: 85, text: "temos 100 clientes" },
+    ]},
+    words: [{ start: 6, end: 7, word: "100" }],
+  };
+  const r1 = runStyleEngine({ styleId: "dynamic_creator_01", analysis, duration: 15, seed: "same" });
+  const r2 = runStyleEngine({ styleId: "dynamic_creator_01", analysis, duration: 15, seed: "same" });
+  return r1.events.length === r2.events.length && r1.events.every((e, i) => e.animation === r2.events[i].animation);
+});
+test("StyleEngine: estilos diferentes = outputs diferentes (teste 29)", () => {
+  const analysis = {
+    narrative: { timeline: [
+      { start: 0, end: 3, role: "hook", importance: "high", confidence: 90, text: "vamos ver" },
+      { start: 5, end: 10, role: "problem", importance: "high", confidence: 85, text: "o problema é" },
+      { start: 12, end: 18, role: "proof", importance: "critical", confidence: 92, text: "97 por cento" },
+      { start: 20, end: 25, role: "cta", importance: "high", confidence: 88, text: "compra agora" },
+    ]},
+    words: [{ start: 13, end: 14, word: "97" }],
+  };
+  const natural = runStyleEngine({ styleId: "natural_clean_01", analysis, duration: 30, seed: "test" });
+  const viral = runStyleEngine({ styleId: "viral_fast_01", analysis, duration: 30, seed: "test" });
+  // Viral deve gerar mais eventos que natural
+  return viral.events.length > natural.events.length;
+});
+test("StyleEngine: sem NUMBER trigger não emite big_number (teste 31)", () => {
+  const analysis = {
+    narrative: { timeline: [{ start: 0, end: 5, role: "hook", importance: "high", confidence: 90, text: "olá" }]},
+    words: [], productMoments: { moments: [] },
+  };
+  const result = runStyleEngine({ styleId: "viral_fast_01", analysis, duration: 10, seed: "test" });
+  return !result.events.some((e) => e.animation === "big_number");
+});
+
 // Report
 const report = {
   passed, failed, total: passed + failed,

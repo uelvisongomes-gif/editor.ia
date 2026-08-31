@@ -22,6 +22,9 @@ import { ClipCollection } from "./components/ClipCollection.jsx";
 import { discoverClips } from "./services/clips/clipDiscoveryEngine.js";
 import { createClipQueue } from "./services/clips/clipJobQueue.js";
 import { buildClipEditState, computeStandaloneQuality } from "./services/clips/clipAutoEditor.js";
+import { StylePicker } from "./components/StylePicker.jsx";
+import { StyleDebugPanel } from "./components/StyleDebugPanel.jsx";
+import { runStyleEngine } from "./services/styleEngine/styleEngine.js";
 import { getMusicById } from "./services/musicCatalog.js";
 import { AuthGate } from "./components/AuthGate.jsx";
 import { createHistory, pushState, undo as undoHistory, redo as redoHistory, canUndo, canRedo } from "./services/edlHistory.js";
@@ -993,6 +996,10 @@ export default function AiVideoEditor() {
   const [clipJobs, setClipJobs] = useState([]);
   const clipQueueRef = useRef(null);
   const sourceAnalysisRef = useRef(null);
+  // Style Engine
+  const [selectedStyleId, setSelectedStyleId] = useState("dynamic_creator_01");
+  const [styleResult, setStyleResult] = useState(null);
+  const [styleDebugOpen, setStyleDebugOpen] = useState(false);
   // Seleção de zoom para edição (excluir/redimensionar/mover/nível).
   const [selectedZoomId, setSelectedZoomId] = useState(null);
   // Ref pra drag state
@@ -1142,6 +1149,7 @@ export default function AiVideoEditor() {
     setClipJobs([]);
     if (clipQueueRef.current) { try { clipQueueRef.current.clear(); } catch {} clipQueueRef.current = null; }
     sourceAnalysisRef.current = null;
+    setStyleResult(null);
     setNarrativeTopic("");
     setSmartDone(false);
     setSmartError("");
@@ -1675,6 +1683,19 @@ async function callMistakeDetectionAPI(words) {
       setPatternInterrupts(result.patternInterrupts || null);
       setDimensionalQuality(result.qualityScore || null);
       setAudioReport(result.audioReport || null);
+      // Style Engine · aplica estilo selecionado
+      try {
+        const sr = runStyleEngine({
+          styleId: selectedStyleId,
+          analysis: result,
+          duration,
+          seed: `proj-${videoUrl?.slice(-16) || "default"}`,
+        });
+        setStyleResult(sr);
+      } catch (err) {
+        console.warn("[styleEngine] falhou:", err.message);
+        setStyleResult(null);
+      }
       // Fase 7 · Clip Discovery — só faz sentido em vídeos longos (>= 60s)
       sourceAnalysisRef.current = result;
       if (duration >= 60) {
@@ -2456,6 +2477,25 @@ async function callMistakeDetectionAPI(words) {
     },
     [platform]
   );
+
+  // Style Engine · trocar estilo reaplica sem re-analisar (Item 27)
+  const handleStyleChange = (newStyleId) => {
+    setSelectedStyleId(newStyleId);
+    if (sourceAnalysisRef.current) {
+      try {
+        const sr = runStyleEngine({
+          styleId: newStyleId,
+          analysis: sourceAnalysisRef.current,
+          duration,
+          seed: `proj-${videoUrl?.slice(-16) || "default"}`,
+        });
+        setStyleResult(sr);
+        showToast?.(`Estilo "${sr.summary?.styleName}" aplicado`);
+      } catch (err) {
+        console.warn("[styleEngine] falhou:", err.message);
+      }
+    }
+  };
 
   // Fase 7 · handlers de clip
   const handleClipWatch = (clip) => {
@@ -4162,6 +4202,12 @@ async function callMistakeDetectionAPI(words) {
                     visualPlan={visualPlan}
                     audioReport={audioReport}
                   />
+                  <div className="mt-2">
+                    <StylePicker selectedId={selectedStyleId} onSelect={handleStyleChange} />
+                  </div>
+                  {styleResult && (
+                    <StyleDebugPanel styleResult={styleResult} open={styleDebugOpen} onToggle={() => setStyleDebugOpen((v) => !v)} />
+                  )}
                   <div className="mt-2">
                     <MyEditingStyle />
                   </div>
