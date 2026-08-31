@@ -29,8 +29,16 @@ export function runStyleEngine({
   styleId, analysis, duration = 60, seed = "no-seed", overrides, context = {}, onLog,
 } = {}) {
   const styleRaw = getStyleById(styleId);
-  if (!styleRaw) return emptyResult(`style "${styleId}" not found`);
-  const style = overrides ? mergeOverrides(styleRaw, overrides) : styleRaw;
+  // Se overrides for um styleConfig completo (com triggers e budget), usa-o direto
+  // Caso contrário busca no registry e aplica overrides parciais
+  let style;
+  if (overrides && overrides.triggers && overrides.budget) {
+    style = { ...overrides, brandKit: { ...(overrides.brandKit || {}) } };
+  } else if (styleRaw) {
+    style = overrides ? mergeOverrides(styleRaw, overrides) : styleRaw;
+  } else {
+    return emptyResult(`style "${styleId}" not found and no complete override`);
+  }
 
   const rng = createSeededRng(`${seed}::${style.id}::${style.version}`);
   // 1. Extrai triggers

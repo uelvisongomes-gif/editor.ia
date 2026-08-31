@@ -36,6 +36,7 @@ import { shouldApplyNoiseReduction } from "./audio/noiseReduction.js";
 import { computeDuckingEnvelope } from "./audio/musicDucking.js";
 import { runAudioDirector } from "./audio/audioDirector.js";
 import { applyUserStyleToProfile } from "./userStyleLearning.js";
+import { applyPresetToProfile } from "./presetApplicator.js";
 import { computeQualityScore } from "./qualityScoring.js";
 
 const STEPS = {
@@ -63,10 +64,14 @@ const throwIfAborted = (signal) => {
  * @param {AbortSignal} [args.signal]
  * @param {(entry:{operation:string,model?:string,inputTokens?:number|null,outputTokens?:number|null,totalTokens?:number|null,latencyMs?:number,audioDurationSec?:number|null,audioBytes?:number|null})=>void} [args.onUsage]
  */
-export async function runEditingPipeline({ videoUrl, duration, profileId, onStep, reuse = {}, signal, onUsage }) {
+export async function runEditingPipeline({ videoUrl, duration, profileId, presetConfig, onStep, reuse = {}, signal, onUsage }) {
   // Fase 6: aplica estilo pessoal do usuário no profile base (só se confidence >= MEDIUM)
   const baseProfile = getProfile(profileId);
-  const profile = applyUserStyleToProfile(baseProfile, { mode: profileId, duration });
+  const userStyleProfile = applyUserStyleToProfile(baseProfile, { mode: profileId, duration });
+  // Novo: aplica preset visual selecionado (17 params afetam threshold/zoom/captions/etc)
+  const profile = presetConfig
+    ? applyPresetToProfile(userStyleProfile, presetConfig)
+    : userStyleProfile;
   const step = (id) => onStep && onStep(id, STEPS[id]);
 
   let words = reuse.words;

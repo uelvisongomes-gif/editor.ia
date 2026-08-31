@@ -26,6 +26,8 @@ import { StylePicker } from "./components/StylePicker.jsx";
 import { StyleDebugPanel } from "./components/StyleDebugPanel.jsx";
 import { runStyleEngine } from "./services/styleEngine/styleEngine.js";
 import { chooseVisualSource } from "./services/styleEngine/styleEventsBridge.js";
+import { getPreset, presetToStyleConfig, DEFAULT_PRESET_ID } from "./services/editingPresets.js";
+import { applyPresetToProfile, derivePresetUIState } from "./services/presetApplicator.js";
 import { getMusicById } from "./services/musicCatalog.js";
 import { AuthGate } from "./components/AuthGate.jsx";
 import { createHistory, pushState, undo as undoHistory, redo as redoHistory, canUndo, canRedo } from "./services/edlHistory.js";
@@ -997,8 +999,8 @@ export default function AiVideoEditor() {
   const [clipJobs, setClipJobs] = useState([]);
   const clipQueueRef = useRef(null);
   const sourceAnalysisRef = useRef(null);
-  // Style Engine
-  const [selectedStyleId, setSelectedStyleId] = useState("dynamic_creator_01");
+  // Style Engine + Editing Preset (biblioteca visual v2)
+  const [selectedStyleId, setSelectedStyleId] = useState(DEFAULT_PRESET_ID);
   const [styleResult, setStyleResult] = useState(null);
   const [styleDebugOpen, setStyleDebugOpen] = useState(false);
   // Seleção de zoom para edição (excluir/redimensionar/mover/nível).
@@ -1658,10 +1660,12 @@ async function callMistakeDetectionAPI(words) {
     const runLog = createUsageLog();
     try {
       const reuseSameVideo = cachedRef.current.videoUrl === videoUrl;
+      const currentPreset = getPreset(selectedStyleId);
       const result = await runEditingPipeline({
         videoUrl,
         duration,
         profileId: intensityId,
+        presetConfig: currentPreset?.config,
         onStep: (_id, label) => setSmartStep(label),
         signal: controller.signal,
         onUsage: (entry) => addUsageEntry(runLog, entry),
@@ -1690,13 +1694,16 @@ async function callMistakeDetectionAPI(words) {
       setPatternInterrupts(result.patternInterrupts || null);
       setDimensionalQuality(result.qualityScore || null);
       setAudioReport(result.audioReport || null);
-      // Style Engine · aplica estilo selecionado
+      // Style Engine · aplica preset selecionado (via styleConfig derivado)
       try {
+        const preset = getPreset(selectedStyleId);
+        const styleConfig = preset ? presetToStyleConfig(preset) : null;
         const sr = runStyleEngine({
-          styleId: selectedStyleId,
+          styleId: styleConfig?.id || selectedStyleId,
           analysis: result,
           duration,
           seed: `proj-${videoUrl?.slice(-16) || "default"}`,
+          overrides: styleConfig || undefined,
         });
         setStyleResult(sr);
       } catch (err) {
@@ -2486,26 +2493,47 @@ async function callMistakeDetectionAPI(words) {
   );
 
   // Style Engine · trocar estilo reaplica sem re-analisar (Item 27)
-  const handleStyleChange = (newStyleId) => {
-    setSelectedStyleId(newStyleId);
+  const handleStyleChange = (newPresetId) => {
+    setSelectedStyleId(newPresetId);
+    const preset = getPreset(newPresetId);
+    if (!preset) { showToast?.("Preset não encontrado"); return; }
+
+    // 1. Aplicar UI state do preset (zoom on/off, captions on/off, música volume)
+    const uiState = derivePresetUIState(preset.config);
+    if (uiState.smartZoomEnabled != null) setSmartZoomEnabled(uiState.smartZoomEnabled);
+    if (uiState.autoCaptionsEnabled != null) {
+      setAutoCaptionsEnabled(uiState.autoCaptionsEnabled);
+      if (uiState.autoCaptionsEnabled && wordTimestamps.length) {
+        setCaptions(buildCaptionsFromWords(wordTimestamps, 7));
+      } else if (!uiState.autoCaptionsEnabled) {
+        setCaptions([]);
+      }
+    }
+    if (uiState.captionPosition) setCaptionPosition(uiState.captionPosition);
+    if (uiState.transitionsEnabled != null) setTransitionsEnabled(uiState.transitionsEnabled);
+    if (uiState.musicVolume != null) setMusicVolume(uiState.musicVolume);
+
+    // 2. Se já analisou, reprocessa Style Engine com o styleConfig derivado do preset
     if (sourceAnalysisRef.current) {
       try {
+        // Injeta preset styleConfig como override no registry
+        const styleConfig = presetToStyleConfig(preset);
         const sr = runStyleEngine({
-          styleId: newStyleId,
+          styleId: styleConfig.id,
           analysis: sourceAnalysisRef.current,
           duration,
           seed: `proj-${videoUrl?.slice(-16) || "default"}`,
+          overrides: styleConfig,
         });
         setStyleResult(sr);
         const eventCount = sr?.summary?.finalEventCount || 0;
-        showToast?.(`Estilo "${sr.summary?.styleName}" · ${eventCount} efeitos`);
+        showToast?.(`${preset.name} · ${eventCount} efeitos aplicados`);
       } catch (err) {
         console.warn("[styleEngine] falhou:", err.message);
-        showToast?.("Falha ao trocar estilo");
+        showToast?.(`${preset.name} aplicado (efeitos após analisar)`);
       }
     } else {
-      // Ainda não analisou — avisa que precisa rodar primeiro
-      showToast?.("Roda 'Edição inteligente' pra ver o estilo em ação");
+      showToast?.(`${preset.name} escolhido — rode "Edição inteligente"`);
     }
   };
 

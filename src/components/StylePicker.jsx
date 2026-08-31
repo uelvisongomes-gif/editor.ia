@@ -1,94 +1,159 @@
-// Style Picker — Item 33. Cards de estilo agrupados por categoria +
-// favoritos + recentes + meus estilos.
+// Style Picker v2 — biblioteca visual de modelos de edição.
+// Cards verticais 9:16, 2 colunas. Preview vídeo no hover (fallback pra
+// placeholder gradient quando arquivo ainda não existe).
+// Inspirado em apps como Captions.
 
-import React, { useMemo, useState } from "react";
-import { listStyles, listCategories, loadFavorites, toggleFavorite, loadRecent } from "../services/styleEngine/styleRegistry.js";
+import React, { useMemo, useRef, useState } from "react";
+import { EDITING_PRESETS } from "../services/editingPresets.js";
 
-const CATEGORY_LABEL = {
-  natural: "Natural", dynamic: "Dinâmico", viral: "Viral",
-  storytelling: "Storytelling", podcast: "Podcast", tutorial: "Tutorial",
-  tiktokshop: "TikTok Shop", ugc: "UGC Ads", business: "Business", high_energy: "High Energy",
-  custom: "Meus estilos",
-};
+const VISIBLE_INITIAL = 4;
 
 export function StylePicker({ selectedId, onSelect }) {
-  const [favTick, setFavTick] = useState(0);
-  const styles = useMemo(() => listStyles(), []);
-  const categories = useMemo(() => listCategories(), []);
-  const favorites = useMemo(() => loadFavorites(), [favTick]);
-  const recent = useMemo(() => loadRecent(), [selectedId]);
-
-  const handleFav = (id) => { toggleFavorite(id); setFavTick((n) => n + 1); };
-
-  const groupedByCat = useMemo(() => {
-    const out = {};
-    for (const cat of categories) out[cat] = styles.filter((s) => s.category === cat);
-    return out;
-  }, [styles, categories]);
+  const [showAll, setShowAll] = useState(false);
+  const presets = EDITING_PRESETS;
+  const displayed = showAll ? presets : presets.slice(0, VISIBLE_INITIAL);
 
   return (
     <div style={{ background: "#12081C", border: "1px solid #2A1A3E" }} className="rounded-lg p-3">
-      <p style={{ color: "#F5EFFF" }} className="text-xs font-bold uppercase tracking-wide mb-3">Estilo de edição</p>
+      <div className="flex items-center justify-between mb-3">
+        <p style={{ color: "#F5EFFF" }} className="text-xs font-bold uppercase tracking-wide">
+          Estilo de edição
+        </p>
+        <span style={{ color: "#7060A0" }} className="text-[10px]">
+          {presets.length} modelos
+        </span>
+      </div>
 
-      {favorites.length > 0 && (
-        <div className="mb-3">
-          <div style={{ color: "#7060A0" }} className="text-[10px] uppercase mb-1">Favoritos</div>
-          <div className="flex flex-wrap gap-1.5">
-            {favorites.map((id) => {
-              const s = styles.find((x) => x.id === id);
-              if (!s) return null;
-              return <StyleChip key={id} style={s} selected={id === selectedId} onSelect={onSelect} onFav={handleFav} isFav />;
-            })}
-          </div>
-        </div>
+      <div className="grid grid-cols-2 gap-2">
+        {displayed.map((preset) => (
+          <PresetCard key={preset.id} preset={preset}
+                      selected={preset.id === selectedId}
+                      onSelect={onSelect} />
+        ))}
+      </div>
+
+      {!showAll && presets.length > VISIBLE_INITIAL && (
+        <button onClick={() => setShowAll(true)}
+                style={{ color: "#FF6A2B", background: "transparent" }}
+                className="w-full mt-2 py-1.5 text-[11px] font-semibold hover:underline">
+          Ver todos ({presets.length - VISIBLE_INITIAL} mais)
+        </button>
       )}
-
-      {recent.length > 0 && (
-        <div className="mb-3">
-          <div style={{ color: "#7060A0" }} className="text-[10px] uppercase mb-1">Usados recentemente</div>
-          <div className="flex flex-wrap gap-1.5">
-            {recent.slice(0, 4).map((id) => {
-              const s = styles.find((x) => x.id === id);
-              if (!s) return null;
-              return <StyleChip key={id} style={s} selected={id === selectedId} onSelect={onSelect} onFav={handleFav} isFav={favorites.includes(id)} />;
-            })}
-          </div>
-        </div>
+      {showAll && (
+        <button onClick={() => setShowAll(false)}
+                style={{ color: "#7060A0", background: "transparent" }}
+                className="w-full mt-2 py-1.5 text-[10px] hover:underline">
+          Mostrar menos
+        </button>
       )}
-
-      {categories.map((cat) => (
-        <div key={cat} className="mb-2">
-          <div style={{ color: "#7060A0" }} className="text-[10px] uppercase mb-1">{CATEGORY_LABEL[cat] || cat}</div>
-          <div className="flex flex-wrap gap-1.5">
-            {(groupedByCat[cat] || []).map((s) => (
-              <StyleChip key={s.id} style={s} selected={s.id === selectedId}
-                onSelect={onSelect} onFav={handleFav} isFav={favorites.includes(s.id)} />
-            ))}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
 
-function StyleChip({ style, selected, onSelect, onFav, isFav }) {
+function PresetCard({ preset, selected, onSelect }) {
+  const videoRef = useRef(null);
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const [hovering, setHovering] = useState(false);
+
+  const handleHover = (val) => {
+    setHovering(val);
+    if (videoRef.current) {
+      if (val) { videoRef.current.play?.().catch(() => {}); }
+      else { try { videoRef.current.pause(); videoRef.current.currentTime = 0; } catch {} }
+    }
+  };
+
+  const borderColor = selected ? "#FF6A2B" : "#2A1A3E";
+  const glow = selected ? "0 0 24px rgba(255,106,43,0.35)" : "none";
+
   return (
     <div
-      onClick={() => onSelect?.(style.id)}
+      onClick={() => onSelect?.(preset.id)}
+      onMouseEnter={() => handleHover(true)}
+      onMouseLeave={() => handleHover(false)}
       style={{
-        background: selected ? `linear-gradient(92deg, ${style.brandKit?.primary || "#FF6A2B"}20, ${style.brandKit?.secondary || "#FF3EA5"}20)` : "#1A0F28",
-        border: selected ? `1px solid ${style.brandKit?.primary || "#FF6A2B"}` : "1px solid #2A1A3E",
+        border: `2px solid ${borderColor}`,
+        borderRadius: 10,
+        overflow: "hidden",
         cursor: "pointer",
+        background: "#1A0F28",
+        transition: "transform 0.15s ease, box-shadow 0.2s ease",
+        transform: selected ? "translateY(-2px)" : "translateY(0)",
+        boxShadow: glow,
       }}
-      className="px-2 py-1.5 rounded flex items-center gap-1.5 text-[11px] font-semibold"
     >
-      <span style={{ color: selected ? style.brandKit?.primary : "#F5EFFF" }}>{style.name}</span>
-      <button
-        onClick={(e) => { e.stopPropagation(); onFav?.(style.id); }}
-        style={{ background: "transparent", color: isFav ? "#FFB020" : "#7060A0", padding: 0 }}
-        className="text-xs leading-none"
-        title={isFav ? "Desfavoritar" : "Favoritar"}
-      >{isFav ? "★" : "☆"}</button>
+      {/* Preview 9:16 */}
+      <div style={{
+        position: "relative",
+        aspectRatio: "9 / 16",
+        background: preset.preview?.placeholderBg || "#0A0410",
+        overflow: "hidden",
+      }}>
+        {/* Video sempre monta; se load falhar, placeholder mostrado por cima */}
+        <video
+          ref={videoRef}
+          src={preset.preview?.videoUrl}
+          muted loop playsInline preload="metadata"
+          onLoadedData={() => setVideoLoaded(true)}
+          onError={() => setVideoLoaded(false)}
+          style={{
+            position: "absolute", inset: 0, width: "100%", height: "100%",
+            objectFit: "cover", opacity: videoLoaded ? 1 : 0,
+            transition: "opacity 0.2s",
+          }}
+        />
+        {/* Placeholder mostrado quando não há vídeo carregado */}
+        {!videoLoaded && (
+          <div style={{
+            position: "absolute", inset: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            textAlign: "center", padding: 8,
+          }}>
+            <div style={{
+              fontFamily: "'Archivo Black',sans-serif",
+              fontSize: 28, fontWeight: 900,
+              color: "#0F0621", lineHeight: 0.95,
+              textShadow: "0 2px 8px rgba(255,255,255,0.3)",
+            }}>{preset.shortName || preset.name}</div>
+          </div>
+        )}
+        {/* Selected badge */}
+        {selected && (
+          <div style={{
+            position: "absolute", top: 6, right: 6,
+            background: "#FF6A2B", color: "#fff",
+            width: 20, height: 20, borderRadius: 999,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 11, fontWeight: 900,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+          }}>✓</div>
+        )}
+        {/* Hover play indicator */}
+        {hovering && videoLoaded && (
+          <div style={{
+            position: "absolute", bottom: 6, right: 6,
+            background: "rgba(0,0,0,0.7)", color: "#fff",
+            padding: "2px 6px", borderRadius: 3,
+            fontSize: 8, fontWeight: 700,
+          }}>▶ preview</div>
+        )}
+      </div>
+
+      {/* Nome + descrição */}
+      <div style={{ padding: "8px 8px 10px" }}>
+        <div style={{
+          color: selected ? "#FF6A2B" : "#F5EFFF",
+          fontSize: 12, fontWeight: 800,
+          fontFamily: "'Inter Tight',sans-serif",
+          lineHeight: 1.1, marginBottom: 3,
+        }}>{preset.name}</div>
+        <div style={{
+          color: "#7060A0", fontSize: 9,
+          lineHeight: 1.3,
+          display: "-webkit-box", WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical", overflow: "hidden",
+        }}>{preset.description}</div>
+      </div>
     </div>
   );
 }
