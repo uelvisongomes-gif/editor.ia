@@ -1349,6 +1349,12 @@ export default function AiVideoEditor() {
     chooseVisualSource({ styleResult, brollPlan, graphicsPlan, zoomEvents, transitionPlan: null }),
     [styleResult, brollPlan, graphicsPlan, zoomEvents]
   );
+  // Composition ativa no currentTime — decide LAYOUT (não overlay).
+  const activeComposition = useMemo(() => {
+    const schedule = styleResult?.compositionSchedule;
+    if (!schedule?.segments?.length) return null;
+    return schedule.segments.find((s) => currentTime >= s.start && currentTime < s.end) || null;
+  }, [styleResult, currentTime]);
   const zoomCues = useMemo(
     () => (wordTimestamps.length ? findZoomCuesFromWords(wordTimestamps) : null),
     [wordTimestamps]
@@ -3478,23 +3484,108 @@ async function callMistakeDetectionAPI(words) {
                     display: showingEdited && editedVideoUrl ? "none" : "block",
                   }}
                 >
-                  <video
-                    ref={videoRef}
-                    src={videoUrl}
-                    style={{
-                      width: "100%", height: "100%", display: "block",
-                      objectFit: "cover",
-                      filter: applyFilterString(colorAdjust),
-                      transform: `scale(${zoomScale})`,
-                      transformOrigin: "center center",
-                      opacity: previewOpacity,
-                    }}
-                    onLoadedMetadata={onLoadedMetadata}
-                    onTimeUpdate={onTimeUpdate}
-                    onError={onVideoError}
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                  />
+                  {(() => {
+                    // Composition-aware speaker slot. Sem composition ativa OU full_speaker → ocupa tudo.
+                    const comp = activeComposition;
+                    const speakerSlot = comp?.slotContent?.speaker
+                      ? (comp.compositionId === "top_media_bottom_speaker" ? { top: "50%", left: 0, width: "100%", height: "50%" }
+                        : comp.compositionId === "big_number_composed" ? { top: "55%", left: 0, width: "100%", height: "45%" }
+                        : comp.compositionId === "product_focus" ? { top: "70%", left: 0, width: "100%", height: "30%" }
+                        : comp.compositionId === "screenshot_focus" ? { top: "75%", left: "70%", width: "28%", height: "22%", borderRadius: 8, overflow: "hidden" }
+                        : { top: 0, left: 0, width: "100%", height: "100%" })
+                      : { top: 0, left: 0, width: "100%", height: "100%" };
+                    const hideSpeaker = comp?.compositionId === "full_broll" || comp?.compositionId === "big_text";
+                    return (
+                      <div style={{
+                        position: "absolute", ...speakerSlot,
+                        transition: "top 0.35s cubic-bezier(0.4,0,0.2,1), height 0.35s cubic-bezier(0.4,0,0.2,1), left 0.35s, width 0.35s",
+                        overflow: "hidden", background: "#000",
+                        opacity: hideSpeaker ? 0 : 1,
+                      }}>
+                        <video
+                          ref={videoRef}
+                          src={videoUrl}
+                          style={{
+                            width: "100%", height: "100%", display: "block",
+                            objectFit: "cover",
+                            filter: applyFilterString(colorAdjust),
+                            transform: `scale(${zoomScale})`,
+                            transformOrigin: "center center",
+                            opacity: previewOpacity,
+                          }}
+                          onLoadedMetadata={onLoadedMetadata}
+                          onTimeUpdate={onTimeUpdate}
+                          onError={onVideoError}
+                          onPlay={() => setIsPlaying(true)}
+                          onPause={() => setIsPlaying(false)}
+                        />
+                      </div>
+                    );
+                  })()}
+                  {/* Composition MEDIA slot — B-roll/imagem no lugar definido pela composição */}
+                  {activeComposition?.slotContent?.media && (() => {
+                    const comp = activeComposition;
+                    const mediaSlot = comp.compositionId === "top_media_bottom_speaker"
+                        ? { top: 0, left: 0, width: "100%", height: "50%" }
+                      : comp.compositionId === "picture_in_picture"
+                        ? { top: "5%", right: "5%", width: "40%", height: "28%", borderRadius: 10, overflow: "hidden", boxShadow: "0 6px 24px rgba(0,0,0,0.5)" }
+                      : comp.compositionId === "full_broll"
+                        ? { top: 0, left: 0, width: "100%", height: "100%" }
+                      : null;
+                    if (!mediaSlot) return null;
+                    return (
+                      <div style={{
+                        position: "absolute", ...mediaSlot,
+                        transition: "all 0.35s cubic-bezier(0.4,0,0.2,1)",
+                      }}>
+                        <video src={comp.slotContent.media}
+                               autoPlay muted loop playsInline
+                               style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        {comp.slotContent.attribution && (
+                          <div style={{
+                            position: "absolute", bottom: 4, right: 4,
+                            background: "rgba(0,0,0,0.6)", color: "#fff",
+                            padding: "1px 6px", borderRadius: 3, fontSize: 9,
+                          }}>{comp.slotContent.attribution}</div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {/* Composition NUMBER slot — number grande na região superior sem cobrir speaker */}
+                  {activeComposition?.compositionId === "big_number_composed" && activeComposition.slotContent?.number && (
+                    <div style={{
+                      position: "absolute", top: 0, left: 0, width: "100%", height: "55%",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: "linear-gradient(180deg, #08040E 60%, transparent 100%)",
+                      transition: "opacity 0.3s",
+                    }}>
+                      <div style={{
+                        fontFamily: "'Archivo Black',sans-serif",
+                        fontSize: "clamp(56px, 16vw, 180px)",
+                        fontWeight: 900, lineHeight: 1,
+                        background: "linear-gradient(92deg,#FF6A2B 0%,#FF3EA5 100%)",
+                        WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                        textShadow: "0 6px 32px rgba(255,62,165,0.6)",
+                        animation: "fxBigNumber 0.5s cubic-bezier(0.34,1.56,0.64,1)",
+                      }}>{activeComposition.slotContent.number}</div>
+                    </div>
+                  )}
+                  {/* Composition QUOTE slot — card overlay com quote */}
+                  {activeComposition?.compositionId === "quote" && activeComposition.slotContent?.quote && (
+                    <div style={{
+                      position: "absolute", top: "32%", left: "8%", width: "84%",
+                      animation: "fxFadeUp 0.6s ease-out",
+                    }}>
+                      <div style={{
+                        background: "rgba(15,6,33,0.92)", color: "#F5EFFF",
+                        borderLeft: "4px solid #FF6A2B",
+                        padding: "22px 24px", borderRadius: 10,
+                        fontFamily: "'Inter Tight',sans-serif", fontStyle: "italic",
+                        fontSize: "clamp(18px, 3.5vw, 32px)", lineHeight: 1.35,
+                        fontWeight: 600,
+                      }}>"{activeComposition.slotContent.quote}"</div>
+                    </div>
+                  )}
                   {activeCaption && (() => {
                     // Posições relativas ao VIDEO CONTAINER, respeitando
                     // seleção do usuário (Alta/Média/Baixa). Valores da

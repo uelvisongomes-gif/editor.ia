@@ -66,6 +66,7 @@ const CREATOR_DYNAMIC = {
     videoUrl: "/assets/editing-presets/creator_dynamic.mp4",
     thumbnailUrl: "/assets/editing-presets/creator_dynamic.jpg",
     placeholderBg: "linear-gradient(140deg, #FF6A2B 0%, #FF3EA5 100%)",
+    mockStyle: "dynamic",
   },
   config: {
     cutPacing: "medium", silenceRemoval: "moderate", jumpCutIntensity: "subtle",
@@ -75,6 +76,14 @@ const CREATOR_DYNAMIC = {
     musicStyle: "upbeat", musicIntensity: 0.55,
     brollFrequency: 0.5, soundEffects: "subtle",
     hookEmphasis: 0.75, ctaEmphasis: 0.8,
+  },
+  compositionBehavior: {
+    full_speaker: 0.55,
+    top_media_bottom_speaker: 0.55,
+    picture_in_picture: 0.3,
+    full_broll: 0.15,
+    big_number_composed: 0.65,
+    quote: 0.20,
   },
 };
 
@@ -97,6 +106,14 @@ const CLEAN_PRO = {
     brollFrequency: 0.2, soundEffects: "none",
     hookEmphasis: 0.4, ctaEmphasis: 0.5,
   },
+  compositionBehavior: {
+    full_speaker: 0.9,
+    top_media_bottom_speaker: 0.15,
+    picture_in_picture: 0.1,
+    full_broll: 0.05,
+    big_number_composed: 0.35,
+    quote: 0.08,
+  },
 };
 
 const VIRAL_FAST = {
@@ -117,6 +134,14 @@ const VIRAL_FAST = {
     musicStyle: "upbeat", musicIntensity: 0.75,
     brollFrequency: 0.7, soundEffects: "heavy",
     hookEmphasis: 1.0, ctaEmphasis: 1.0,
+  },
+  compositionBehavior: {
+    full_speaker: 0.30,
+    top_media_bottom_speaker: 0.75,
+    picture_in_picture: 0.6,
+    full_broll: 0.5,
+    big_number_composed: 0.85,
+    quote: 0.30,
   },
 };
 
@@ -139,6 +164,14 @@ const STORYTELLING = {
     brollFrequency: 0.6, soundEffects: "subtle",
     hookEmphasis: 0.7, ctaEmphasis: 0.5,
   },
+  compositionBehavior: {
+    full_speaker: 0.55,
+    top_media_bottom_speaker: 0.35,
+    picture_in_picture: 0.15,
+    full_broll: 0.55,
+    big_number_composed: 0.20,
+    quote: 0.55,
+  },
 };
 
 const TIKTOK_SHOP = {
@@ -159,6 +192,14 @@ const TIKTOK_SHOP = {
     musicStyle: "commercial", musicIntensity: 0.6,
     brollFrequency: 0.4, soundEffects: "moderate",
     hookEmphasis: 0.9, ctaEmphasis: 1.0,
+  },
+  compositionBehavior: {
+    full_speaker: 0.35,
+    top_media_bottom_speaker: 0.7,
+    picture_in_picture: 0.35,
+    full_broll: 0.3,
+    big_number_composed: 0.7,
+    quote: 0.15,
   },
 };
 
@@ -181,6 +222,14 @@ const PODCAST_CLIPS = {
     brollFrequency: 0.1, soundEffects: "none",
     hookEmphasis: 0.65, ctaEmphasis: 0.55,
   },
+  compositionBehavior: {
+    full_speaker: 0.85,
+    top_media_bottom_speaker: 0.10,
+    picture_in_picture: 0.15,
+    full_broll: 0.05,
+    big_number_composed: 0.30,
+    quote: 0.25,
+  },
 };
 
 const TUTORIAL_PRO = {
@@ -202,6 +251,14 @@ const TUTORIAL_PRO = {
     brollFrequency: 0.5, soundEffects: "subtle",
     hookEmphasis: 0.6, ctaEmphasis: 0.7,
   },
+  compositionBehavior: {
+    full_speaker: 0.5,
+    top_media_bottom_speaker: 0.55,
+    picture_in_picture: 0.35,
+    full_broll: 0.45, // screenshots contam como full_broll aqui
+    big_number_composed: 0.55,
+    quote: 0.10,
+  },
 };
 
 const UGC_ADS = {
@@ -222,6 +279,14 @@ const UGC_ADS = {
     musicStyle: "motivational", musicIntensity: 0.7,
     brollFrequency: 0.6, soundEffects: "heavy",
     hookEmphasis: 1.0, ctaEmphasis: 1.0,
+  },
+  compositionBehavior: {
+    full_speaker: 0.35,
+    top_media_bottom_speaker: 0.70,
+    picture_in_picture: 0.45,
+    full_broll: 0.55,
+    big_number_composed: 0.75,
+    quote: 0.15,
   },
 };
 

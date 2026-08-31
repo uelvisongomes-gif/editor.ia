@@ -13,6 +13,7 @@ import { decideEffects } from "./effectDecisionLayer.js";
 import { applyCooldowns, applyDensityBudget } from "./visualDensityBudget.js";
 import { resolveConflicts } from "./conflictResolver.js";
 import { createSeededRng } from "./seedRandom.js";
+import { scheduleCompositions } from "./compositionEngine.js";
 
 /**
  * @param {object} args
@@ -73,10 +74,20 @@ export function runStyleEngine({
   const { kept: finalEvents, dropped: droppedConflict } = resolveConflicts(afterBudget);
   onLog?.({ phase: "conflict", kept: finalEvents.length, dropped: droppedConflict.length });
 
+  // 6. Composition scheduler — decide COMO A TELA É COMPOSTA por momento
+  const compositionBehavior = context.compositionBehavior || style.compositionBehavior || {};
+  const brollSuggestions = analysis?.brollPlan?.suggestions || [];
+  const compositionSchedule = scheduleCompositions({
+    narrative: analysis?.narrative, triggers, brollSuggestions,
+    compositionBehavior, duration, rng,
+  });
+  onLog?.({ phase: "composition", total: compositionSchedule.segments.length, byComp: compositionSchedule.summary.byComposition });
+
   markRecent(style.id);
 
   return {
     style, events: finalEvents, triggers,
+    compositionSchedule,
     dropped: {
       cooldown: droppedCd, budget: droppedBudget, conflict: droppedConflict,
       totalDropped: droppedCd.length + droppedBudget.length + droppedConflict.length,
@@ -88,6 +99,9 @@ export function runStyleEngine({
       finalEventCount: finalEvents.length,
       byCategory: finalEvents.reduce((acc, e) => { acc[e.category] = (acc[e.category] || 0) + 1; return acc; }, {}),
       effectiveDensityPerMin: budgetSummary.effectiveDensityPerMin,
+      compositionCount: compositionSchedule.segments.length,
+      compositionsByType: compositionSchedule.summary.byComposition,
+      nonSpeakerRatio: compositionSchedule.summary.nonSpeakerRatio,
     },
   };
 }

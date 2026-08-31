@@ -5,6 +5,7 @@
 
 import React, { useMemo, useRef, useState } from "react";
 import { EDITING_PRESETS } from "../services/editingPresets.js";
+import { StylePreviewMock } from "./StylePreviewMock.jsx";
 
 const VISIBLE_INITIAL = 4;
 
@@ -102,20 +103,10 @@ function PresetCard({ preset, selected, onSelect }) {
             transition: "opacity 0.2s",
           }}
         />
-        {/* Placeholder mostrado quando não há vídeo carregado */}
+        {/* Preview procedural — mini-mock animado do layout real do estilo.
+            Substituído pelo <video> quando arquivo .mp4 existir. */}
         {!videoLoaded && (
-          <div style={{
-            position: "absolute", inset: 0,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            textAlign: "center", padding: 8,
-          }}>
-            <div style={{
-              fontFamily: "'Archivo Black',sans-serif",
-              fontSize: 28, fontWeight: 900,
-              color: "#0F0621", lineHeight: 0.95,
-              textShadow: "0 2px 8px rgba(255,255,255,0.3)",
-            }}>{preset.shortName || preset.name}</div>
-          </div>
+          <StylePreviewMock presetId={preset.id} animate={hovering || selected} />
         )}
         {/* Selected badge */}
         {selected && (
