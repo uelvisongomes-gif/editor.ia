@@ -26,8 +26,10 @@ import { StylePicker } from "./components/StylePicker.jsx";
 import { StyleDebugPanel } from "./components/StyleDebugPanel.jsx";
 import { runStyleEngine } from "./services/styleEngine/styleEngine.js";
 import { chooseVisualSource } from "./services/styleEngine/styleEventsBridge.js";
-import { getPreset, presetToStyleConfig, DEFAULT_PRESET_ID } from "./services/editingPresets.js";
+import { presetToStyleConfig, DEFAULT_PRESET_ID } from "./services/editingPresets.js";
+import { resolvePresetOrVariant, PRESET_VARIANTS } from "./services/editingPresetVariants.js";
 import { applyPresetToProfile, derivePresetUIState } from "./services/presetApplicator.js";
+const getPreset = (id) => resolvePresetOrVariant(id);
 import { getMusicById } from "./services/musicCatalog.js";
 import { AuthGate } from "./components/AuthGate.jsx";
 import { createHistory, pushState, undo as undoHistory, redo as redoHistory, canUndo, canRedo } from "./services/edlHistory.js";
@@ -1000,7 +1002,7 @@ export default function AiVideoEditor() {
   const clipQueueRef = useRef(null);
   const sourceAnalysisRef = useRef(null);
   // Style Engine + Editing Preset (biblioteca visual v2)
-  const [selectedStyleId, setSelectedStyleId] = useState(DEFAULT_PRESET_ID);
+  const [selectedStyleId, setSelectedStyleId] = useState("creator_dynamic_01");
   const [styleResult, setStyleResult] = useState(null);
   const [styleDebugOpen, setStyleDebugOpen] = useState(false);
   // Seleção de zoom para edição (excluir/redimensionar/mover/nível).
